@@ -20,7 +20,11 @@ class ScreenshotCacheService {
             fatalError("ScreenshotCacheService: Failed to locate system caches directory - this indicates a critical system configuration issue")
         }
         cacheDirectory = cachesDir.appendingPathComponent("ScreenshotCache", isDirectory: true)
-        try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
+        do {
+            try FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
+        } catch {
+            fatalError("ScreenshotCacheService: Failed to create cache directory at \(cacheDirectory.path): \(error)")
+        }
     }
 
     func store(_ image: UIImage, forKey key: String) {
@@ -35,7 +39,7 @@ class ScreenshotCacheService {
             aggressiveMemoryEvict()
         }
 
-        guard let fileURL = fileURL(for: key) else { return }
+        let fileURL = fileURL(for: key)
         let jpegData = compressed.jpegData(compressionQuality: 0.4)
         Task.detached(priority: .utility) {
             if let data = jpegData {
@@ -101,7 +105,7 @@ class ScreenshotCacheService {
             return cached
         }
 
-        guard let fileURL = fileURL(for: key) else { return nil }
+        let fileURL = fileURL(for: key)
         guard FileManager.default.fileExists(atPath: fileURL.path()),
               let data = try? Data(contentsOf: fileURL),
               let image = UIImage(data: data) else {
@@ -208,10 +212,9 @@ class ScreenshotCacheService {
         return files.filter { $0.pathExtension == "jpg" }.count
     }
 
-    private nonisolated func fileURL(for key: String) -> URL? {
+    private func fileURL(for key: String) -> URL {
         let safeKey = key.replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: ":", with: "_")
-        guard let cachesDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else { return nil }
-        return cachesDir.appendingPathComponent("ScreenshotCache", isDirectory: true).appendingPathComponent("\(safeKey).jpg")
+        return cacheDirectory.appendingPathComponent("\(safeKey).jpg")
     }
 }
