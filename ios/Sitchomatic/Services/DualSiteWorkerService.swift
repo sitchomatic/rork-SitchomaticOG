@@ -46,6 +46,7 @@ class DualSiteWorkerService {
         let workerSessionId = session.id
 
         joeEngine.onScreenshot = { [weak self] screenshot in
+            screenshot.site = "joe"
             joeScreenshots.append(screenshot)
             Task { @MainActor in
                 await self?.captureUnifiedScreenshot(
@@ -58,6 +59,7 @@ class DualSiteWorkerService {
             }
         }
         ignEngine.onScreenshot = { [weak self] screenshot in
+            screenshot.site = "ignition"
             ignScreenshots.append(screenshot)
             Task { @MainActor in
                 await self?.captureUnifiedScreenshot(

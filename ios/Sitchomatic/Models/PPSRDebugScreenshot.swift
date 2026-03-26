@@ -61,9 +61,11 @@ class PPSRDebugScreenshot: Identifiable {
     let image: UIImage
     var croppedImage: UIImage?
     var note: String
+    var site: String = ""
     var autoDetectedResult: AutoDetectedResult = .unknown
     var userOverride: UserResultOverride = .none
     var userNote: String = ""
+    var correctionReason: String = ""
 
     nonisolated enum AutoDetectedResult: String, Sendable {
         case success
@@ -113,7 +115,13 @@ class PPSRDebugScreenshot: Identifiable {
         croppedImage ?? image
     }
 
-    init(stepName: String, cardDisplayNumber: String, cardId: String = "", vin: String, email: String = "", image: UIImage, croppedImage: UIImage? = nil, note: String = "", autoDetectedResult: AutoDetectedResult = .unknown) {
+    var isJoe: Bool { site.lowercased().contains("joe") }
+    var isIgnition: Bool { site.lowercased().contains("ign") }
+    var siteLabel: String { isJoe ? "Joe" : isIgnition ? "Ignition" : "Unknown" }
+    var siteIcon: String { isJoe ? "suit.spade.fill" : isIgnition ? "flame.fill" : "globe" }
+    var siteColor: SwiftUI.Color { isJoe ? .green : isIgnition ? .orange : .gray }
+
+    init(stepName: String, cardDisplayNumber: String, cardId: String = "", vin: String, email: String = "", image: UIImage, croppedImage: UIImage? = nil, note: String = "", site: String = "", autoDetectedResult: AutoDetectedResult = .unknown) {
         self.id = UUID().uuidString
         self.timestamp = Date()
         self.stepName = stepName
@@ -124,6 +132,7 @@ class PPSRDebugScreenshot: Identifiable {
         self.image = image
         self.croppedImage = croppedImage
         self.note = note
+        self.site = site
         self.autoDetectedResult = autoDetectedResult
     }
 

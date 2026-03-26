@@ -357,6 +357,37 @@ struct LoginScreenshotAlbum: Identifiable {
     var overrideCount: Int { screenshots.filter { $0.hasUserOverride }.count }
     var aiDetectedCount: Int { screenshots.filter { $0.autoDetectedResult != .unknown }.count }
 
+    var joeScreenshots: [PPSRDebugScreenshot] { screenshots.filter { $0.isJoe } }
+    var ignitionScreenshots: [PPSRDebugScreenshot] { screenshots.filter { $0.isIgnition } }
+
+    var joeResult: UserResultOverride {
+        let terminal = joeScreenshots.first(where: { $0.effectiveResult != .none })
+        return terminal?.effectiveResult ?? .none
+    }
+
+    var ignitionResult: UserResultOverride {
+        let terminal = ignitionScreenshots.first(where: { $0.effectiveResult != .none })
+        return terminal?.effectiveResult ?? .none
+    }
+
+    var pairedResultLabel: String {
+        let joe = joeResult
+        let ign = ignitionResult
+        if joe == .none && ign == .none { return "Pending" }
+        if joe == ign { return joe.displayLabel }
+        if joe == .none { return ign.displayLabel }
+        if ign == .none { return joe.displayLabel }
+        return "\(joe.displayLabel) / \(ign.displayLabel)"
+    }
+
+    var pairedResultColors: (Color, Color) {
+        (joeResult == .none ? .gray : joeResult.color, ignitionResult == .none ? .gray : ignitionResult.color)
+    }
+
+    var hasBothSites: Bool {
+        !joeScreenshots.isEmpty && !ignitionScreenshots.isEmpty
+    }
+
     var statusColor: Color {
         guard let status = credentialStatus else { return .gray }
         switch status {
@@ -385,8 +416,30 @@ struct LoginAlbumCard: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if let firstShot = album.screenshots.first {
-                Color.clear.frame(height: 140)
+            if album.hasBothSites {
+                HStack(spacing: 1) {
+                    sitePreviewTile(screenshots: album.joeScreenshots, label: "JOE", icon: "suit.spade.fill", color: .green)
+                    sitePreviewTile(screenshots: album.ignitionScreenshots, label: "IGN", icon: "flame.fill", color: .orange)
+                }
+                .frame(height: 130)
+                .clipShape(.rect(cornerRadii: .init(topLeading: 12, topTrailing: 12)))
+                .overlay(alignment: .bottomLeading) {
+                    HStack(spacing: 6) {
+                        Text("\(album.screenshots.count)")
+                            .font(.system(.caption2, design: .monospaced, weight: .heavy))
+                            .foregroundStyle(.white)
+                        Image(systemName: "camera.fill")
+                            .font(.system(size: 8))
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
+                    .padding(.horizontal, 8).padding(.vertical, 4)
+                    .background(.black.opacity(0.6)).clipShape(Capsule()).padding(8)
+                }
+                .overlay(alignment: .topLeading) {
+                    credentialStatusBadge.padding(8)
+                }
+            } else if let firstShot = album.screenshots.first {
+                Color.clear.frame(height: 130)
                     .overlay { Image(uiImage: firstShot.image).resizable().aspectRatio(contentMode: .fill).allowsHitTesting(false) }
                     .clipShape(.rect(cornerRadii: .init(topLeading: 12, topTrailing: 12)))
                     .overlay(alignment: .bottomLeading) {
@@ -426,34 +479,10 @@ struct LoginAlbumCard: View {
                     }
                 }
 
-                HStack(spacing: 6) {
-                    if album.successCount > 0 {
-                        miniStat(icon: "checkmark.circle.fill", count: album.successCount, color: .green)
-                    }
-                    if album.noAccCount > 0 {
-                        miniStat(icon: "xmark.circle.fill", count: album.noAccCount, color: .secondary)
-                    }
-                    if album.permDisabledCount > 0 {
-                        miniStat(icon: "lock.slash.fill", count: album.permDisabledCount, color: .red)
-                    }
-                    if album.tempDisabledCount > 0 {
-                        miniStat(icon: "clock.badge.exclamationmark", count: album.tempDisabledCount, color: .orange)
-                    }
-                    if album.unsureCount > 0 {
-                        miniStat(icon: "questionmark.diamond.fill", count: album.unsureCount, color: .yellow)
-                    }
-                    if album.overrideCount > 0 {
-                        miniStat(icon: "hand.point.up.left.fill", count: album.overrideCount, color: .cyan)
-                    }
-                    if album.aiDetectedCount > 0 {
-                        miniStat(icon: "cpu", count: album.aiDetectedCount, color: .indigo)
-                    }
-                    Spacer()
-                    if evidenceBundle != nil {
-                        Image(systemName: "archivebox.fill")
-                            .font(.system(size: 9))
-                            .foregroundStyle(.cyan.opacity(0.6))
-                    }
+                if album.hasBothSites {
+                    pairedResultBar
+                } else {
+                    singleSiteStats
                 }
             }
             .padding(12)
@@ -464,6 +493,96 @@ struct LoginAlbumCard: View {
             RoundedRectangle(cornerRadius: 12)
                 .strokeBorder(album.statusColor.opacity(0.25), lineWidth: 1)
         )
+    }
+
+    private func sitePreviewTile(screenshots: [PPSRDebugScreenshot], label: String, icon: String, color: Color) -> some View {
+        GeometryReader { geo in
+            if let shot = screenshots.first {
+                Color.clear
+                    .overlay { Image(uiImage: shot.displayImage).resizable().aspectRatio(contentMode: .fill).allowsHitTesting(false) }
+                    .clipped()
+                    .overlay(alignment: .top) {
+                        HStack(spacing: 3) {
+                            Image(systemName: icon).font(.system(size: 7, weight: .bold))
+                            Text(label).font(.system(size: 8, weight: .heavy, design: .monospaced))
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6).padding(.vertical, 3)
+                        .background(color.opacity(0.85)).clipShape(Capsule())
+                        .padding(.top, 6)
+                    }
+                    .overlay(alignment: .bottomTrailing) {
+                        let result = screenshots.first(where: { $0.effectiveResult != .none })?.effectiveResult ?? .none
+                        if result != .none {
+                            Text(result.displayLabel.uppercased())
+                                .font(.system(size: 7, weight: .heavy, design: .monospaced))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 5).padding(.vertical, 2)
+                                .background(result.color.opacity(0.85)).clipShape(Capsule())
+                                .padding(6)
+                        }
+                    }
+            } else {
+                Color(.tertiarySystemGroupedBackground)
+                    .overlay {
+                        VStack(spacing: 4) {
+                            Image(systemName: icon).font(.caption).foregroundStyle(color.opacity(0.4))
+                            Text(label).font(.system(size: 8, weight: .heavy, design: .monospaced)).foregroundStyle(.tertiary)
+                        }
+                    }
+            }
+        }
+    }
+
+    private var pairedResultBar: some View {
+        HStack(spacing: 0) {
+            HStack(spacing: 4) {
+                Image(systemName: "suit.spade.fill").font(.system(size: 8)).foregroundStyle(.green)
+                Text(album.joeResult == .none ? "PENDING" : album.joeResult.displayLabel.uppercased())
+                    .font(.system(size: 9, weight: .heavy, design: .monospaced))
+                    .foregroundStyle(album.joeResult == .none ? .gray : album.joeResult.color)
+            }
+            Spacer()
+            Text("/")
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundStyle(.quaternary)
+            Spacer()
+            HStack(spacing: 4) {
+                Text(album.ignitionResult == .none ? "PENDING" : album.ignitionResult.displayLabel.uppercased())
+                    .font(.system(size: 9, weight: .heavy, design: .monospaced))
+                    .foregroundStyle(album.ignitionResult == .none ? .gray : album.ignitionResult.color)
+                Image(systemName: "flame.fill").font(.system(size: 8)).foregroundStyle(.orange)
+            }
+        }
+        .padding(.horizontal, 8).padding(.vertical, 6)
+        .background(Color(.tertiarySystemGroupedBackground))
+        .clipShape(.rect(cornerRadius: 8))
+    }
+
+    private var singleSiteStats: some View {
+        HStack(spacing: 6) {
+            if album.successCount > 0 {
+                miniStat(icon: "checkmark.circle.fill", count: album.successCount, color: .green)
+            }
+            if album.noAccCount > 0 {
+                miniStat(icon: "xmark.circle.fill", count: album.noAccCount, color: .secondary)
+            }
+            if album.permDisabledCount > 0 {
+                miniStat(icon: "lock.slash.fill", count: album.permDisabledCount, color: .red)
+            }
+            if album.tempDisabledCount > 0 {
+                miniStat(icon: "clock.badge.exclamationmark", count: album.tempDisabledCount, color: .orange)
+            }
+            if album.unsureCount > 0 {
+                miniStat(icon: "questionmark.diamond.fill", count: album.unsureCount, color: .yellow)
+            }
+            Spacer()
+            if evidenceBundle != nil {
+                Image(systemName: "archivebox.fill")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.cyan.opacity(0.6))
+            }
+        }
     }
 
     private var credentialStatusBadge: some View {
@@ -507,6 +626,18 @@ struct LoginScreenshotCard: View {
                 .overlay(alignment: .topTrailing) {
                     resultIndicator.padding(8)
                 }
+                .overlay(alignment: .topLeading) {
+                    if !screenshot.site.isEmpty {
+                        HStack(spacing: 3) {
+                            Image(systemName: screenshot.siteIcon).font(.system(size: 7, weight: .bold))
+                            Text(screenshot.siteLabel.uppercased()).font(.system(size: 8, weight: .heavy, design: .monospaced))
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6).padding(.vertical, 3)
+                        .background(screenshot.siteColor.opacity(0.85)).clipShape(Capsule())
+                        .padding(8)
+                    }
+                }
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
@@ -523,7 +654,6 @@ struct LoginScreenshotCard: View {
                 }
 
                 HStack(spacing: 12) {
-                    Label(screenshot.cardDisplayNumber, systemImage: "person.fill")
                     if screenshot.hasUserOverride {
                         Text(screenshot.overrideLabel)
                             .font(.system(.caption2, design: .monospaced, weight: .bold))
@@ -609,15 +739,20 @@ struct LoginAlbumDetailSheet: View {
                 Image(systemName: "person.fill").font(.caption).foregroundStyle(.secondary)
                 Text(album.title).font(.system(.caption, design: .monospaced, weight: .semibold))
             }
+
+            if album.hasBothSites {
+                pairedResultsHeader
+            }
+
             HStack(spacing: 12) {
                 Text("\(album.screenshots.count) screenshots").font(.caption).foregroundStyle(.tertiary)
+                if album.hasBothSites {
+                    Text("\(album.joeScreenshots.count) Joe · \(album.ignitionScreenshots.count) Ign")
+                        .font(.caption2).foregroundStyle(.tertiary)
+                }
                 if album.overrideCount > 0 {
                     Label("\(album.overrideCount) overridden", systemImage: "hand.point.up.left.fill")
                         .font(.caption2).foregroundStyle(.cyan)
-                }
-                if album.aiDetectedCount > 0 {
-                    Label("\(album.aiDetectedCount) AI detected", systemImage: "cpu")
-                        .font(.caption2).foregroundStyle(.indigo)
                 }
             }
 
@@ -655,6 +790,40 @@ struct LoginAlbumDetailSheet: View {
             }
         }
         .padding().background(Color(.secondarySystemGroupedBackground)).clipShape(.rect(cornerRadius: 12))
+    }
+
+    private var pairedResultsHeader: some View {
+        HStack(spacing: 0) {
+            VStack(spacing: 4) {
+                HStack(spacing: 4) {
+                    Image(systemName: "suit.spade.fill").font(.system(size: 10, weight: .bold)).foregroundStyle(.green)
+                    Text("JOE FORTUNE").font(.system(size: 9, weight: .heavy, design: .monospaced)).foregroundStyle(.secondary)
+                }
+                Text(album.joeResult == .none ? "PENDING" : album.joeResult.displayLabel.uppercased())
+                    .font(.system(size: 13, weight: .heavy, design: .monospaced))
+                    .foregroundStyle(album.joeResult == .none ? .gray : album.joeResult.color)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(album.joeResult == .none ? Color.clear : album.joeResult.color.opacity(0.06))
+
+            Rectangle().fill(.quaternary).frame(width: 1)
+
+            VStack(spacing: 4) {
+                HStack(spacing: 4) {
+                    Image(systemName: "flame.fill").font(.system(size: 10, weight: .bold)).foregroundStyle(.orange)
+                    Text("IGNITION").font(.system(size: 9, weight: .heavy, design: .monospaced)).foregroundStyle(.secondary)
+                }
+                Text(album.ignitionResult == .none ? "PENDING" : album.ignitionResult.displayLabel.uppercased())
+                    .font(.system(size: 13, weight: .heavy, design: .monospaced))
+                    .foregroundStyle(album.ignitionResult == .none ? .gray : album.ignitionResult.color)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(album.ignitionResult == .none ? Color.clear : album.ignitionResult.color.opacity(0.06))
+        }
+        .clipShape(.rect(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.quaternary, lineWidth: 0.5))
     }
 
     private func evidenceCard(_ bundle: EvidenceBundle) -> some View {
@@ -792,6 +961,7 @@ struct LoginScreenshotCorrectionSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
+                    siteBadgeHeader
                     credentialStatusCard
                     screenshotSection
                     greenBannerScanSection
@@ -800,6 +970,7 @@ struct LoginScreenshotCorrectionSheet: View {
                         evidenceSummaryCard(bundle)
                     }
                     correctionSection
+                    aiFeedbackSection
                     noteSection
                 }
                 .padding()
@@ -1138,6 +1309,32 @@ struct LoginScreenshotCorrectionSheet: View {
         .padding().background(Color(.secondarySystemGroupedBackground)).clipShape(.rect(cornerRadius: 12))
     }
 
+    private var siteBadgeHeader: some View {
+        Group {
+            if !screenshot.site.isEmpty {
+                HStack(spacing: 8) {
+                    Image(systemName: screenshot.siteIcon)
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(screenshot.siteColor)
+                    Text(screenshot.siteLabel)
+                        .font(.system(.subheadline, design: .monospaced, weight: .heavy))
+                        .foregroundStyle(screenshot.siteColor)
+                    Spacer()
+                    Text(screenshot.effectiveResult.displayLabel.uppercased())
+                        .font(.system(size: 10, weight: .heavy, design: .monospaced))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(screenshot.effectiveResult.color.opacity(0.85))
+                        .clipShape(Capsule())
+                }
+                .padding(12)
+                .background(screenshot.siteColor.opacity(0.06))
+                .clipShape(.rect(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(screenshot.siteColor.opacity(0.2), lineWidth: 1))
+            }
+        }
+    }
+
     private var autoDetectionInfo: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -1153,8 +1350,36 @@ struct LoginScreenshotCorrectionSheet: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(4)
             }
+
+            if screenshot.autoDetectedResult != .unknown {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Detection reasoning:")
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(.tertiary)
+                    Text(detectionReasoningSummary)
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(6)
+                }
+                .padding(8)
+                .background(Color(.tertiarySystemGroupedBackground))
+                .clipShape(.rect(cornerRadius: 8))
+            }
         }
         .padding().background(Color(.secondarySystemGroupedBackground)).clipShape(.rect(cornerRadius: 12))
+    }
+
+    private var detectionReasoningSummary: String {
+        let note = screenshot.note.lowercased()
+        var reasons: [String] = []
+        if note.contains("has been disabled") { reasons.append("Detected 'has been disabled' → Perm Disabled") }
+        if note.contains("temporarily disabled") { reasons.append("Detected 'temporarily disabled' → Temp Disabled") }
+        if note.contains("incorrect") { reasons.append("Detected 'incorrect' → No Account") }
+        if note.contains("welcome") || note.contains("lobby") || note.contains("dashboard") { reasons.append("Detected success indicators → Success") }
+        if note.contains("green banner") { reasons.append("Green banner detected → Success") }
+        if note.contains("no response") || note.contains("timeout") { reasons.append("No response / timeout → Unsure") }
+        if reasons.isEmpty { reasons.append("AI: \(screenshot.autoDetectedResult.displayLabel) (based on page content analysis)") }
+        return reasons.joined(separator: "\n")
     }
 
     private var autoDetectionBadge: some View {
@@ -1199,6 +1424,101 @@ struct LoginScreenshotCorrectionSheet: View {
             }
         }
         .padding().background(Color(.secondarySystemGroupedBackground)).clipShape(.rect(cornerRadius: 12))
+    }
+
+    private var aiFeedbackSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Image(systemName: "brain.head.profile").foregroundStyle(.purple)
+                Text("Teach AI").font(.headline)
+                Spacer()
+                if !screenshot.correctionReason.isEmpty {
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.green).font(.caption)
+                }
+            }
+
+            Text("If the AI detected this incorrectly, explain why so it learns from the mistake.")
+                .font(.caption2).foregroundStyle(.tertiary)
+
+            if screenshot.hasUserOverride && screenshot.autoDetectedResult.toOverride != screenshot.userOverride {
+                HStack(spacing: 8) {
+                    VStack(spacing: 2) {
+                        Text("AI SAID").font(.system(size: 8, weight: .heavy, design: .monospaced)).foregroundStyle(.tertiary)
+                        Text(screenshot.autoDetectedResult.displayLabel.uppercased())
+                            .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                            .foregroundStyle(screenshot.autoDetectedResult.toOverride.color)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .background(screenshot.autoDetectedResult.toOverride.color.opacity(0.06))
+                    .clipShape(.rect(cornerRadius: 8))
+
+                    Image(systemName: "arrow.right").font(.caption.bold()).foregroundStyle(.tertiary)
+
+                    VStack(spacing: 2) {
+                        Text("CORRECT").font(.system(size: 8, weight: .heavy, design: .monospaced)).foregroundStyle(.tertiary)
+                        Text(screenshot.userOverride.displayLabel.uppercased())
+                            .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                            .foregroundStyle(screenshot.userOverride.color)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .background(screenshot.userOverride.color.opacity(0.06))
+                    .clipShape(.rect(cornerRadius: 8))
+                }
+
+                TextField("Why was the AI wrong? (e.g. 'The page showed incorrect password not disabled')", text: Binding(
+                    get: { screenshot.correctionReason },
+                    set: { screenshot.correctionReason = $0 }
+                ), axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .font(.system(.caption, design: .monospaced))
+                    .lineLimit(2...4)
+                    .padding(10)
+                    .background(Color(.tertiarySystemGroupedBackground))
+                    .clipShape(.rect(cornerRadius: 8))
+
+                if !screenshot.correctionReason.isEmpty {
+                    Button {
+                        submitAIFeedback()
+                    } label: {
+                        Label("Submit AI Feedback", systemImage: "paperplane.fill")
+                            .font(.subheadline.weight(.semibold))
+                            .frame(maxWidth: .infinity).padding(.vertical, 10)
+                            .background(Color.purple).foregroundStyle(.white)
+                            .clipShape(.rect(cornerRadius: 10))
+                    }
+                }
+            } else if !screenshot.hasUserOverride {
+                Text("Override the result above first, then explain the correction here.")
+                    .font(.caption).foregroundStyle(.secondary)
+                    .padding(10).frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(.tertiarySystemGroupedBackground))
+                    .clipShape(.rect(cornerRadius: 8))
+            } else {
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                    Text("AI and override agree: \(screenshot.userOverride.displayLabel)")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                .padding(10).frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.green.opacity(0.06))
+                .clipShape(.rect(cornerRadius: 8))
+            }
+        }
+        .padding().background(Color(.secondarySystemGroupedBackground)).clipShape(.rect(cornerRadius: 12))
+    }
+
+    private func submitAIFeedback() {
+        let host = screenshot.isJoe ? "joefortunepokies.win" : "ignitioncasino.eu"
+        UserInterventionLearningService.shared.recordCorrection(
+            host: host,
+            pageContent: "\(screenshot.note) | Reason: \(screenshot.correctionReason)",
+            currentURL: "",
+            originalClassification: screenshot.autoDetectedResult.rawValue,
+            userCorrectedOutcome: screenshot.userOverride.rawValue,
+            actionTaken: "manual_ai_feedback_with_reason"
+        )
     }
 
     private var noteSection: some View {
