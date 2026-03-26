@@ -1,0 +1,10 @@
+{
+  "$schema": "https://rork.com/schema/rork.json",
+  "apps": [
+    {
+      "name": "Sitchomatic",
+      "path": "ios",
+      "framework": "swift"
+    }
+  ]
+}
