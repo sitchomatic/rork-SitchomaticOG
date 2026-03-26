@@ -368,6 +368,22 @@ class DebugLogger {
         return (nsError.code, nsError.domain, userMessage, isRetryable)
     }
 
+    // MARK: - Nonisolated Background Logging Bridge
+
+    nonisolated static func logBackground(
+        _ message: String,
+        category: DebugLogCategory = .system,
+        level: DebugLogLevel = .info,
+        detail: String? = nil,
+        sessionId: String? = nil,
+        durationMs: Int? = nil,
+        metadata: [String: String]? = nil
+    ) {
+        Task { @MainActor in
+            DebugLogger.shared.log(message, category: category, level: level, detail: detail, sessionId: sessionId, durationMs: durationMs, metadata: metadata)
+        }
+    }
+
     // MARK: - Private
 
     private func scheduleFlush() {

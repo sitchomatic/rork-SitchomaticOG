@@ -49,11 +49,11 @@ class ProxyConnectionPool {
         return "direct:\(targetHost):\(targetPort)"
     }
 
-    func prewarmConnections(count: Int, upstream: ProxyConfig?, targetHost: String = "warmup", targetPort: UInt16 = 443) {
+    func prewarmConnections(count: Int, upstream: ProxyConfig?, targetHost: String = "warmup", targetPort: UInt16 = 443) async {
         guard count > 0 else { return }
 
         if let upstream {
-            let qualityScore = ProxyQualityDecayService.shared.scoreFor(proxyId: upstream.id.uuidString)
+            let qualityScore = await ProxyQualityDecayService.shared.scoreFor(proxyId: upstream.id.uuidString)
             if qualityScore < 0.2 {
                 logger.log("ConnectionPool: prewarm SKIPPED — proxy \(upstream.displayString) is demoted (score: \(String(format: "%.2f", qualityScore)))", category: .proxy, level: .warning)
                 return
@@ -115,7 +115,7 @@ class ProxyConnectionPool {
         }
 
         if pooledConnections.count >= maxPoolSize {
-            evictOldest()
+            Task { await self.evictOldest() }
         }
 
         let id = UUID()
@@ -259,16 +259,18 @@ class ProxyConnectionPool {
         logger.log("ConnectionPool: evicted \(id.uuidString.prefix(8)) (\(reason))", category: .proxy, level: .trace)
     }
 
-    private func evictOldest() {
+    private func evictOldest() async {
         let qualityDecay = ProxyQualityDecayService.shared
         let idleConnections = pooledConnections.filter { $0.value.isIdle }
 
         if !idleConnections.isEmpty {
-            let scored = idleConnections.map { (id, info) -> (UUID, Double, Date) in
+            var scored: [(UUID, Double, Date)] = []
+            for (id, info) in idleConnections {
                 let proxyId = "\(info.targetHost):\(info.targetPort)"
-                let score = qualityDecay.scoreFor(proxyId: proxyId)
-                return (id, score, info.lastUsedAt)
-            }.sorted { a, b in
+                let score = await qualityDecay.scoreFor(proxyId: proxyId)
+                scored.append((id, score, info.lastUsedAt))
+            }
+            scored.sort { a, b in
                 if abs(a.1 - b.1) > 0.1 { return a.1 < b.1 }
                 return a.2 < b.2
             }
@@ -285,12 +287,12 @@ class ProxyConnectionPool {
         }
     }
 
-    func evictDemotedConnections(qualityThreshold: Double = 0.2) {
+    func evictDemotedConnections(qualityThreshold: Double = 0.2) async {
         let qualityDecay = ProxyQualityDecayService.shared
         var evicted = 0
         for (id, info) in pooledConnections where info.isIdle {
             let proxyId = "\(info.targetHost):\(info.targetPort)"
-            let score = qualityDecay.scoreFor(proxyId: proxyId)
+            let score = await qualityDecay.scoreFor(proxyId: proxyId)
             if score < qualityThreshold {
                 evictConnection(id: id, reason: "demoted proxy (score: \(String(format: "%.2f", score)))")
                 evicted += 1

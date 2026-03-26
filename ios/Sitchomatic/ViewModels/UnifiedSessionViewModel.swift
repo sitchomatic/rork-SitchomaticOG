@@ -380,7 +380,7 @@ class UnifiedSessionViewModel {
 
     private func generateIdentity() -> SessionIdentity {
         let stealth = PPSRStealthService.shared
-        let profile = stealth.nextProfile()
+        let profile = stealth.nextProfileSync()
         let proxyService = ProxyRotationService.shared
         let proxy = proxyService.nextWorkingProxy(for: .joe)
 

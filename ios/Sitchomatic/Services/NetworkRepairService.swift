@@ -138,7 +138,7 @@ class NetworkRepairService {
             phasesCompleted += 1
 
             try await executePhase(.resetCircuitBreakers) {
-                HostCircuitBreakerService.shared.resetAll()
+                await HostCircuitBreakerService.shared.resetAll()
                 self.logger.log("NetworkRepair: circuit breakers reset", category: .network, level: .info)
             }
             phasesCompleted += 1

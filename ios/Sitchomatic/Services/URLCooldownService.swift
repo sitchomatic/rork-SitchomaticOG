@@ -1,13 +1,11 @@
 import Foundation
 
-@MainActor
-class URLCooldownService {
+actor URLCooldownService {
     static let shared = URLCooldownService()
 
     private var cooldowns: [String: CooldownEntry] = [:]
     private var urlStats: [String: URLSuccessStats] = [:]
     private var disabledURLs: Set<String> = []
-    private let logger = DebugLogger.shared
 
     var defaultCooldownSeconds: TimeInterval = 60
     var maxConsecutiveFailuresBeforeCooldown: Int = 2
@@ -50,7 +48,7 @@ class URLCooldownService {
 
         if entry.consecutiveFailures >= maxConsecutiveFailuresBeforeCooldown {
             entry.cooldownUntil = Date().addingTimeInterval(defaultCooldownSeconds)
-            logger.log("URLCooldown: \(host) placed on \(Int(defaultCooldownSeconds))s cooldown after \(entry.consecutiveFailures) consecutive failures", category: .network, level: .warning)
+            DebugLogger.logBackground("URLCooldown: \(host) placed on \(Int(defaultCooldownSeconds))s cooldown after \(entry.consecutiveFailures) consecutive failures", category: .network, level: .warning)
         }
 
         cooldowns[host] = entry
@@ -62,7 +60,7 @@ class URLCooldownService {
         if stats.totalAttempts >= autoDisableMinAttempts && stats.rollingSuccessRate < autoDisableThreshold && !disabledURLs.contains(host) {
             disabledURLs.insert(host)
             urlStats[host]?.disabledAt = Date()
-            logger.log("URLCooldown: AUTO-DISABLED \(host) — rolling success rate \(Int(stats.rollingSuccessRate * 100))% over \(stats.totalAttempts) attempts", category: .network, level: .critical)
+            DebugLogger.logBackground("URLCooldown: AUTO-DISABLED \(host) — rolling success rate \(Int(stats.rollingSuccessRate * 100))% over \(stats.totalAttempts) attempts", category: .network, level: .critical)
         }
     }
 
@@ -77,10 +75,11 @@ class URLCooldownService {
 
     func isOnCooldown(_ url: String) -> Bool {
         let host = extractHost(from: url)
-        guard let entry = cooldowns[host], let until = entry.cooldownUntil else { return false }
+        guard var entry = cooldowns[host], let until = entry.cooldownUntil else { return false }
         if Date() >= until {
-            cooldowns[host]?.cooldownUntil = nil
-            cooldowns[host]?.consecutiveFailures = 0
+            entry.cooldownUntil = nil
+            entry.consecutiveFailures = 0
+            cooldowns[host] = entry
             return false
         }
         return true
@@ -101,7 +100,7 @@ class URLCooldownService {
         disabledURLs.remove(host)
         urlStats[host]?.recentResults.removeAll()
         urlStats[host]?.disabledAt = nil
-        logger.log("URLCooldown: re-enabled \(host)", category: .network, level: .info)
+        DebugLogger.logBackground("URLCooldown: re-enabled \(host)", category: .network, level: .info)
     }
 
     func disabledURLsList() -> [(host: String, successRate: Int, attempts: Int, disabledSince: Date?)] {
@@ -127,7 +126,7 @@ class URLCooldownService {
         cooldowns.removeAll()
         urlStats.removeAll()
         disabledURLs.removeAll()
-        logger.log("URLCooldown: all cooldowns and stats cleared", category: .network, level: .info)
+        DebugLogger.logBackground("URLCooldown: all cooldowns and stats cleared", category: .network, level: .info)
     }
 
     func activeCooldowns() -> [(host: String, remainingSeconds: Int, failures: Int)] {

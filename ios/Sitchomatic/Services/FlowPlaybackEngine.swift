@@ -52,7 +52,7 @@ class FlowPlaybackEngine {
         let sessionId = "playback_\(flow.id.prefix(8))"
         logger.startSession(sessionId, category: .flowRecorder, message: "FlowPlayback: starting '\(flow.name)' from step \(effectiveStart) — \(flow.actions.count) actions")
 
-        let profile = PPSRStealthService.shared.nextProfile()
+        let profile = await PPSRStealthService.shared.nextProfile()
         let stealthJS = PPSRStealthService.shared.buildComprehensiveStealthJSPublic(profile: profile)
         do {
             _ = try await webView.evaluateJavaScript(stealthJS)

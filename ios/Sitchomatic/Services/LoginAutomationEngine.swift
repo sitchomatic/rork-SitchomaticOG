@@ -132,7 +132,7 @@ class LoginAutomationEngine {
             self?.logger.log(msg, category: .fingerprint, level: debugLevel, sessionId: sessionId)
         }
         logger.log("WebView session setUp (wipeAll: true) network=\(netConfig.label)", category: .webView, level: .trace, sessionId: sessionId)
-        session.setUp(wipeAll: true)
+        await session.setUp(wipeAll: true)
         session.onProcessTerminated = { [weak self] in
             self?.logger.log("LoginEngine: WebView process terminated for \(sessionId) — crash recovery will handle", category: .webView, level: .critical, sessionId: sessionId)
         }
@@ -505,7 +505,7 @@ class LoginAutomationEngine {
                     logger.log("Full session reset before final attempt", category: .webView, level: .debug, sessionId: sessionId)
                     session.tearDown(wipeAll: true)
                     session.stealthEnabled = stealthEnabled
-                    session.setUp(wipeAll: true)
+                    await session.setUp(wipeAll: true)
                 }
             }
         }
@@ -577,7 +577,7 @@ class LoginAutomationEngine {
                 challengeBypassed = true
             case "rotateFingerprint":
                 let stealth = PPSRStealthService.shared
-                let newProfile = stealth.nextProfile()
+                let newProfile = await stealth.nextProfile()
                 session.webView?.customUserAgent = newProfile.userAgent
                 let newJS = stealth.createStealthUserScript(profile: newProfile)
                 session.webView?.configuration.userContentController.removeAllUserScripts()
@@ -591,7 +591,7 @@ class LoginAutomationEngine {
                 attempt.logs.append(PPSRLogEntry(message: "AI: full session reset recommended", level: .warning))
                 session.tearDown(wipeAll: true)
                 session.stealthEnabled = stealthEnabled
-                session.setUp(wipeAll: true)
+                await session.setUp(wipeAll: true)
                 let reloaded = await session.loadPage(timeout: automationSettings.pageLoadTimeout)
                 challengeBypassed = reloaded
                 if !reloaded {

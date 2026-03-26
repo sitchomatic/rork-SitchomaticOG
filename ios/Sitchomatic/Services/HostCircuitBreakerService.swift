@@ -1,10 +1,8 @@
 import Foundation
 
-@MainActor
-class HostCircuitBreakerService {
+actor HostCircuitBreakerService {
     static let shared = HostCircuitBreakerService()
 
-    private let logger = DebugLogger.shared
     private var hostStates: [String: CircuitState] = [:]
 
     private let failureThreshold: Int = 3
@@ -73,7 +71,7 @@ class HostCircuitBreakerService {
             state.status = .softBreak
             state.softBreakAt = Date()
             hostStates[key] = state
-            logger.log("CircuitBreaker: \(key) → SOFT BREAK (50% traffic reduction)", category: .network, level: .warning)
+            DebugLogger.logBackground("CircuitBreaker: \(key) → SOFT BREAK (50% traffic reduction)", category: .network, level: .warning)
         }
     }
 
@@ -84,7 +82,7 @@ class HostCircuitBreakerService {
         state.softBreakAt = nil
         state.weightedFailureScore = max(0, state.weightedFailureScore - 2)
         hostStates[key] = state
-        logger.log("CircuitBreaker: \(key) SOFT BREAK → CLOSED", category: .network, level: .success)
+        DebugLogger.logBackground("CircuitBreaker: \(key) SOFT BREAK → CLOSED", category: .network, level: .success)
     }
 
     func shouldAllow(host: String, path: String? = nil) -> Bool {
@@ -101,7 +99,7 @@ class HostCircuitBreakerService {
                 state.status = .halfOpen
                 state.halfOpenProbes = 0
                 hostStates[key] = state
-                logger.log("CircuitBreaker: \(key) → HALF-OPEN (cooldown expired)", category: .network, level: .info)
+                DebugLogger.logBackground("CircuitBreaker: \(key) → HALF-OPEN (cooldown expired)", category: .network, level: .info)
                 return true
             }
             return false
@@ -137,19 +135,19 @@ class HostCircuitBreakerService {
             state.openedAt = Date()
             state.halfOpenProbes = 0
             state.effectiveCooldown = computeCooldown(for: type, consecutiveTrips: state.consecutiveTrips)
-            logger.log("CircuitBreaker: \(key) HALF-OPEN → OPEN (probe failed: \(type.rawValue)) cooldown=\(Int(state.effectiveCooldown))s (trip #\(state.consecutiveTrips))", category: .network, level: .warning)
+            DebugLogger.logBackground("CircuitBreaker: \(key) HALF-OPEN → OPEN (probe failed: \(type.rawValue)) cooldown=\(Int(state.effectiveCooldown))s (trip #\(state.consecutiveTrips))", category: .network, level: .warning)
         } else if state.weightedFailureScore >= softBreakThreshold && state.status == .closed {
             state.status = .softBreak
             state.softBreakAt = Date()
             hostStates[key] = state
-            logger.log("CircuitBreaker: \(key) → SOFT BREAK — weighted score \(state.weightedFailureScore), reducing traffic 50%", category: .network, level: .warning)
+            DebugLogger.logBackground("CircuitBreaker: \(key) → SOFT BREAK — weighted score \(state.weightedFailureScore), reducing traffic 50%", category: .network, level: .warning)
             return
         } else if state.weightedFailureScore >= failureThreshold * 2 {
             state.consecutiveTrips += 1
             state.status = .open
             state.openedAt = Date()
             state.effectiveCooldown = computeCooldown(for: type, consecutiveTrips: state.consecutiveTrips)
-            logger.log("CircuitBreaker: \(key) TRIPPED OPEN — weighted score \(state.weightedFailureScore), \(state.failureCount) failures, last: \(type.rawValue), cooldown=\(Int(state.effectiveCooldown))s", category: .network, level: .critical)
+            DebugLogger.logBackground("CircuitBreaker: \(key) TRIPPED OPEN — weighted score \(state.weightedFailureScore), \(state.failureCount) failures, last: \(type.rawValue), cooldown=\(Int(state.effectiveCooldown))s", category: .network, level: .critical)
         }
 
         hostStates[key] = state
@@ -169,7 +167,7 @@ class HostCircuitBreakerService {
                 state.halfOpenProbes = 0
                 state.consecutiveTrips = 0
                 state.effectiveCooldown = baseCooldownSeconds
-                logger.log("CircuitBreaker: \(key) HALF-OPEN → CLOSED (probes succeeded)", category: .network, level: .success)
+                DebugLogger.logBackground("CircuitBreaker: \(key) HALF-OPEN → CLOSED (probes succeeded)", category: .network, level: .success)
             }
         } else {
             state.failureCount = max(0, state.failureCount - 1)
@@ -201,12 +199,12 @@ class HostCircuitBreakerService {
     func resetCircuit(host: String, path: String? = nil) {
         let key = circuitKey(host: host, path: path)
         hostStates.removeValue(forKey: key)
-        logger.log("CircuitBreaker: \(key) manually RESET", category: .network, level: .info)
+        DebugLogger.logBackground("CircuitBreaker: \(key) manually RESET", category: .network, level: .info)
     }
 
     func resetAll() {
         hostStates.removeAll()
-        logger.log("CircuitBreaker: all circuits RESET", category: .network, level: .info)
+        DebugLogger.logBackground("CircuitBreaker: all circuits RESET", category: .network, level: .info)
     }
 
     private func computeCooldown(for failureType: FailureType, consecutiveTrips: Int) -> TimeInterval {

@@ -353,27 +353,27 @@ class NetworkSessionFactory {
         let latencyMs = Int((CFAbsoluteTimeGetCurrent() - startTime) * 1000)
 
         if alive {
-            scoring.recordSuccess(proxyId: proxy.id, latencyMs: latencyMs)
+            await scoring.recordSuccess(proxyId: proxy.id, latencyMs: latencyMs)
             logger.log("Preflight: proxy \(proxy.displayString) is alive (\(latencyMs)ms)", category: .proxy, level: .debug)
             return config
         }
 
-        scoring.recordFailure(proxyId: proxy.id)
+        await scoring.recordFailure(proxyId: proxy.id)
         logger.log("Preflight: proxy \(proxy.displayString) DEAD — rotating to next for \(target.rawValue)", category: .proxy, level: .warning)
         proxyService.markProxyFailed(proxy)
 
         let workingProxies = proxyService.proxies(for: target).filter { $0.isWorking || $0.lastTested == nil }
-        if let scoredReplacement = scoring.bestProxy(from: workingProxies) {
+        if let scoredReplacement = await scoring.bestProxy(from: workingProxies) {
             let replStartTime = CFAbsoluteTimeGetCurrent()
             let replacementAlive = await quickSOCKS5Handshake(host: scoredReplacement.host, port: UInt16(scoredReplacement.port))
             let replLatency = Int((CFAbsoluteTimeGetCurrent() - replStartTime) * 1000)
 
             if replacementAlive {
-                scoring.recordSuccess(proxyId: scoredReplacement.id, latencyMs: replLatency)
+                await scoring.recordSuccess(proxyId: scoredReplacement.id, latencyMs: replLatency)
                 logger.log("Preflight: scored replacement \(scoredReplacement.displayString) is alive (\(replLatency)ms)", category: .proxy, level: .info)
                 return .socks5(scoredReplacement)
             }
-            scoring.recordFailure(proxyId: scoredReplacement.id)
+            await scoring.recordFailure(proxyId: scoredReplacement.id)
             proxyService.markProxyFailed(scoredReplacement)
         }
 
@@ -382,10 +382,10 @@ class NetworkSessionFactory {
             let fbAlive = await quickSOCKS5Handshake(host: fallback.host, port: UInt16(fallback.port))
             let fbLatency = Int((CFAbsoluteTimeGetCurrent() - fbStartTime) * 1000)
             if fbAlive {
-                scoring.recordSuccess(proxyId: fallback.id, latencyMs: fbLatency)
+                await scoring.recordSuccess(proxyId: fallback.id, latencyMs: fbLatency)
                 return .socks5(fallback)
             }
-            scoring.recordFailure(proxyId: fallback.id)
+            await scoring.recordFailure(proxyId: fallback.id)
             proxyService.markProxyFailed(fallback)
         }
 

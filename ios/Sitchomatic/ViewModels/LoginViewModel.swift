@@ -453,7 +453,7 @@ class LoginViewModel {
 
         let session = LoginSiteWebSession(targetURL: testURL)
         session.stealthEnabled = stealthEnabled
-        session.setUp(wipeAll: true)
+        await session.setUp(wipeAll: true)
 
         let loaded = await session.loadPage(timeout: TimeoutResolver.resolvePageLoadTimeout(20))
         if loaded {
@@ -577,7 +577,7 @@ class LoginViewModel {
             let testURL = getNextTestURL()
             let outcome = await engine.runLoginTest(attempt, targetURL: testURL, timeout: testTimeout)
             activeTestCount -= 1
-            handleOutcome(outcome, credential: cred, attempt: attempt)
+            await handleOutcome(outcome, credential: cred, attempt: attempt)
             if activeTestCount == 0 { isRunning = false }
             persistCredentials()
         }
@@ -594,7 +594,7 @@ class LoginViewModel {
         secondaryEngine.proxyTarget = .ignition
     }
 
-    private func handleOutcome(_ outcome: LoginOutcome, credential: LoginCredential, attempt: LoginAttempt) {
+    private func handleOutcome(_ outcome: LoginOutcome, credential: LoginCredential, attempt: LoginAttempt) async {
         let duration = attempt.duration ?? 0
         let reviewQueue = ReviewQueueService.shared
         let confidence = attempt.confidenceScore ?? 1.0
@@ -664,8 +664,8 @@ class LoginViewModel {
 
         case .redBannerError:
             credential.status = .untested
-            let redEntry = RequeuePriorityService.shared.prioritize(credentialId: credential.id, username: credential.username, outcome: outcome)
-            let redDetCount = RequeuePriorityService.shared.detectionCount(for: credential.id)
+            let redEntry = await RequeuePriorityService.shared.prioritize(credentialId: credential.id, username: credential.username, outcome: outcome)
+            let redDetCount = await RequeuePriorityService.shared.detectionCount(for: credential.id)
             let _ = proxyService.nextWorkingProxy(for: isIgnitionMode ? .ignition : .joe)
             if let detURL = attempt.detectedURL, !detURL.isEmpty {
                 urlRotation.reportFailure(urlString: detURL)
@@ -680,8 +680,8 @@ class LoginViewModel {
 
         case .smsDetected:
             credential.status = .untested
-            let smsEntry = RequeuePriorityService.shared.prioritize(credentialId: credential.id, username: credential.username, outcome: outcome)
-            let smsDetCount = RequeuePriorityService.shared.detectionCount(for: credential.id)
+            let smsEntry = await RequeuePriorityService.shared.prioritize(credentialId: credential.id, username: credential.username, outcome: outcome)
+            let smsDetCount = await RequeuePriorityService.shared.detectionCount(for: credential.id)
             let _ = proxyService.nextWorkingProxy(for: isIgnitionMode ? .ignition : .joe)
             if let detURL = attempt.detectedURL, !detURL.isEmpty {
                 urlRotation.reportFailure(urlString: detURL)
@@ -702,7 +702,7 @@ class LoginViewModel {
             if outcome == .connectionFailure {
                 consecutiveConnectionFailures += 1
             }
-            let entry = RequeuePriorityService.shared.prioritize(credentialId: credential.id, username: credential.username, outcome: outcome)
+            let entry = await RequeuePriorityService.shared.prioritize(credentialId: credential.id, username: credential.username, outcome: outcome)
             let reason: String
             switch outcome {
             case .timeout: reason = "timeout (\(Int(testTimeout))s combined)"
@@ -835,7 +835,6 @@ class LoginViewModel {
                         let outcome = await engine.runLoginTest(attempt, targetURL: testURL, timeout: testTimeout)
                         await MainActor.run {
                             self.batchCompletedCount += 1
-                            self.handleOutcome(outcome, credential: cred, attempt: attempt)
                             self.updateRecoveryForOutcome(outcome, credential: cred, attempt: attempt)
 
                             if cred.status == .untested {
@@ -850,6 +849,7 @@ class LoginViewModel {
 
                             self.persistCredentials()
                         }
+                        await self.handleOutcome(outcome, credential: cred, attempt: attempt)
                     }
                 }
 

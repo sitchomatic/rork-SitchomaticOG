@@ -393,7 +393,7 @@ class DeviceProxyService {
         if case .socks5(let proxy) = activeConfig {
             resilience.startVerificationLoop(expectedProxy: proxy)
         }
-        connectionPool.prewarmConnections(count: 3, upstream: localProxy.upstreamProxy)
+        Task { await connectionPool.prewarmConnections(count: 3, upstream: localProxy.upstreamProxy) }
         logger.log("DeviceProxy: App-Wide United IP ENABLED (localProxy: \(localProxyEnabled), autoFailover: \(autoFailoverEnabled))", category: .network, level: .info)
     }
 

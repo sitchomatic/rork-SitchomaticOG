@@ -27,11 +27,11 @@ class WebViewLifetimeBudgetService {
         (navigationCounts[sessionId] ?? 0) >= maxNavigationsBeforeRecycle
     }
 
-    func recycleSession(_ session: LoginSiteWebSession, sessionId: String) {
+    func recycleSession(_ session: LoginSiteWebSession, sessionId: String) async {
         totalRecycles += 1
         navigationCounts.removeValue(forKey: sessionId)
         session.tearDown(wipeAll: true)
-        session.setUp(wipeAll: true)
+        await session.setUp(wipeAll: true)
         logger.log("LifetimeBudget: session \(sessionId) RECYCLED (total recycles: \(totalRecycles))", category: .webView, level: .info)
     }
 

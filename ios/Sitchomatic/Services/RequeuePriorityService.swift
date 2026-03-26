@@ -19,11 +19,9 @@ nonisolated struct RequeueEntry: Sendable {
     let requeueCount: Int
 }
 
-@MainActor
-class RequeuePriorityService {
+actor RequeuePriorityService {
     static let shared = RequeuePriorityService()
 
-    private let logger = DebugLogger.shared
     private var requeueCounts: [String: Int] = [:]
     private var detectionCounts: [String: Int] = [:]
     private let maxRequeueCount: Int = 3
@@ -34,7 +32,7 @@ class RequeuePriorityService {
         requeueCounts[credentialId] = count
 
         if count > maxRequeueCount {
-            logger.log("RequeuePriority: \(username) exceeded max requeue count (\(maxRequeueCount)) — dropping", category: .automation, level: .warning)
+            DebugLogger.logBackground("RequeuePriority: \(username) exceeded max requeue count (\(maxRequeueCount)) — dropping", category: .automation, level: .warning)
             return nil
         }
 
@@ -81,7 +79,7 @@ class RequeuePriorityService {
             return nil
         }
 
-        logger.log("RequeuePriority: \(username) → \(priority) (\(reason)) requeue #\(count)", category: .automation, level: .info)
+        DebugLogger.logBackground("RequeuePriority: \(username) → \(priority) (\(reason)) requeue #\(count)", category: .automation, level: .info)
         return RequeueEntry(
             credentialId: credentialId,
             username: username,
@@ -96,7 +94,7 @@ class RequeuePriorityService {
         0
     }
 
-    func cooldownForOutcome(_ outcome: LoginOutcome) -> TimeInterval {
+    nonisolated func cooldownForOutcome(_ outcome: LoginOutcome) -> TimeInterval {
         switch outcome {
         case .redBannerError: return 30
         case .smsDetected: return 60
@@ -108,7 +106,7 @@ class RequeuePriorityService {
         detectionCounts[credentialId] ?? 0
     }
 
-    func sortByPriority(_ entries: [RequeueEntry]) -> [RequeueEntry] {
+    nonisolated func sortByPriority(_ entries: [RequeueEntry]) -> [RequeueEntry] {
         entries.sorted { a, b in
             if a.priority != b.priority {
                 return a.priority < b.priority

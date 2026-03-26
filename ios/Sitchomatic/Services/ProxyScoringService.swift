@@ -1,5 +1,4 @@
 import Foundation
-import Observation
 
 nonisolated struct ProxyScore: Sendable {
     let proxyId: UUID
@@ -44,18 +43,33 @@ nonisolated struct ProxyScore: Sendable {
     }
 }
 
-@Observable
-@MainActor
-class ProxyScoringService {
+actor ProxyScoringService {
     static let shared = ProxyScoringService()
 
     private(set) var scores: [UUID: ProxyScore] = [:]
-    private let logger = DebugLogger.shared
     private let persistKey = "proxy_scoring_v1"
     private let maxRecentLatencies = 20
 
     init() {
-        loadScores()
+        if let data = UserDefaults.standard.data(forKey: persistKey),
+           let array = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+            for dict in array {
+                guard let idStr = dict["id"] as? String, let id = UUID(uuidString: idStr) else { continue }
+                var score = ProxyScore(proxyId: id)
+                score.successCount = dict["successCount"] as? Int ?? 0
+                score.failureCount = dict["failureCount"] as? Int ?? 0
+                score.totalLatencyMs = dict["totalLatencyMs"] as? Int ?? 0
+                score.recentLatencies = dict["recentLatencies"] as? [Int] ?? []
+                score.consecutiveFailures = dict["consecutiveFailures"] as? Int ?? 0
+                if let ts = dict["lastSuccessAt"] as? TimeInterval, ts > 0 {
+                    score.lastSuccessAt = Date(timeIntervalSince1970: ts)
+                }
+                if let ts = dict["lastFailureAt"] as? TimeInterval, ts > 0 {
+                    score.lastFailureAt = Date(timeIntervalSince1970: ts)
+                }
+                scores[id] = score
+            }
+        }
     }
 
     func recordSuccess(proxyId: UUID, latencyMs: Int) {
@@ -121,7 +135,7 @@ class ProxyScoringService {
     func resetScores() {
         scores.removeAll()
         persistScores()
-        logger.log("ProxyScoring: all scores reset", category: .proxy, level: .info)
+        DebugLogger.logBackground("ProxyScoring: all scores reset", category: .proxy, level: .info)
     }
 
     func resetScore(for proxyId: UUID) {

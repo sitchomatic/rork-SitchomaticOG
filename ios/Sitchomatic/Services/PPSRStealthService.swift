@@ -287,9 +287,15 @@ class PPSRStealthService {
 
     var profileCount: Int { trustedProfiles.count }
 
-    func nextProfile() -> SessionProfile {
+    func nextProfileSync() -> SessionProfile {
+        let profile = trustedProfiles[profileIndex % trustedProfiles.count]
+        profileIndex += 1
+        return profile
+    }
+
+    func nextProfile() async -> SessionProfile {
         let tracker = FingerprintSuccessTracker.shared
-        if let bestIdx = tracker.bestProfileIndex(totalProfiles: trustedProfiles.count) {
+        if let bestIdx = await tracker.bestProfileIndex(totalProfiles: trustedProfiles.count) {
             return trustedProfiles[bestIdx]
         }
         let profile = trustedProfiles[profileIndex % trustedProfiles.count]
@@ -297,16 +303,16 @@ class PPSRStealthService {
         return profile
     }
 
-    func nextProfileForHost(_ host: String) -> (profile: SessionProfile, index: Int) {
+    func nextProfileForHost(_ host: String) async -> (profile: SessionProfile, index: Int) {
         if let aiIndex = aiFingerprintTuning.recommendProfileIndex(for: host, totalProfiles: trustedProfiles.count) {
             return (trustedProfiles[aiIndex], aiIndex)
         }
         let tracker = FingerprintSuccessTracker.shared
-        let ranked = tracker.rankedProfileIndices(totalProfiles: trustedProfiles.count)
+        let ranked = await tracker.rankedProfileIndices(totalProfiles: trustedProfiles.count)
         let usedRecently = Set<Int>()
         for idx in ranked {
             if !usedRecently.contains(idx) {
-                let stats = tracker.stats(for: idx)
+                let stats = await tracker.stats(for: idx)
                 if stats == nil || (stats?.totalAttempts ?? 0) < 3 {
                     let fallbackIdx = profileIndex % trustedProfiles.count
                     profileIndex += 1
@@ -345,7 +351,7 @@ class PPSRStealthService {
     }
 
     func fingerprintJS() -> String {
-        let profile = nextProfile()
+        let profile = nextProfileSync()
         return buildComprehensiveStealthJS(profile: profile)
     }
 

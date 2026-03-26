@@ -409,7 +409,7 @@ class BlankPageRecoveryService {
         onLog: ((String, PPSRLogEntry.Level) -> Void)?
     ) async -> Bool {
         let stealth = PPSRStealthService.shared
-        let newProfile = stealth.nextProfile()
+        let newProfile = await stealth.nextProfile()
         session.webView?.customUserAgent = newProfile.userAgent
 
         let newJS = stealth.createStealthUserScript(profile: newProfile)
@@ -453,7 +453,7 @@ class BlankPageRecoveryService {
         await cancellationSafeSleepSeconds(1)
 
         session.stealthEnabled = true
-        session.setUp(wipeAll: true)
+        await session.setUp(wipeAll: true)
 
         await cancellationSafeSleep(milliseconds: 500)
 
@@ -529,7 +529,7 @@ class BlankPageRecoveryService {
         onLog: ((String, PPSRLogEntry.Level) -> Void)?
     ) async -> Bool {
         let stealth = PPSRStealthService.shared
-        let newProfile = stealth.nextProfile()
+        let newProfile = await stealth.nextProfile()
 
         let newJS = stealth.createStealthUserScript(profile: newProfile)
         session.applyNewStealthProfile(userAgent: newProfile.userAgent, userScript: newJS)

@@ -270,7 +270,7 @@ class ConcurrentAutomationEngine {
 
             let batchEnd = min(batchStart + batchSize, attempts.count)
             let batchIndices = Array(batchStart..<batchEnd)
-            let effectiveURLs = resolveEffectiveURLs(indices: batchIndices, healthyURLs: healthyURLs)
+            let effectiveURLs = await resolveEffectiveURLs(indices: batchIndices, healthyURLs: healthyURLs)
 
             let batchResults = await runLoginTaskGroup(
                 indices: batchIndices, attempts: attempts,
@@ -287,7 +287,7 @@ class ConcurrentAutomationEngine {
                 let success = outcome == .success
                 state.recordOutcome(success: success)
                 let matchingURL = effectiveURLs[batchIndices.first ?? 0]?.absoluteString ?? ""
-                urlCooldown.recordSuccess(for: matchingURL)
+                await urlCooldown.recordSuccess(for: matchingURL)
                 credentialTriage.recordOutcome(username: username, outcome: "\(outcome)", latencyMs: latency)
                 if outcome == .permDisabled {
                     state.deadAccounts.insert(username)
@@ -324,9 +324,9 @@ class ConcurrentAutomationEngine {
                     }
                     let matchingURL = effectiveURLs[batchIndices.first ?? 0]?.absoluteString ?? ""
                     if outcome == .connectionFailure || outcome == .timeout {
-                        urlCooldown.recordFailure(for: matchingURL)
+                        await urlCooldown.recordFailure(for: matchingURL)
                     } else {
-                        urlCooldown.recordSuccess(for: matchingURL)
+                        await urlCooldown.recordSuccess(for: matchingURL)
                     }
                     onProgress(state.processed, attempts.count, outcome)
                 }
@@ -570,22 +570,40 @@ class ConcurrentAutomationEngine {
         return result.healthyURLs
     }
 
-    private func resolveEffectiveURLs(indices: [Int], healthyURLs: [URL]) -> [Int: URL] {
+    private func resolveEffectiveURLs(indices: [Int], healthyURLs: [URL]) async -> [Int: URL] {
         var result: [Int: URL] = [:]
         for index in indices {
             let url = healthyURLs[index % healthyURLs.count]
             let urlHost = url.host ?? ""
-            if urlCooldown.isAutoDisabled(url.absoluteString) {
+            if await urlCooldown.isAutoDisabled(url.absoluteString) {
                 logger.log("ConcurrentEngine: URL \(urlHost) is AUTO-DISABLED — skipping", category: .network, level: .warning)
-                result[index] = healthyURLs.first { !urlCooldown.isAutoDisabled($0.absoluteString) && !urlCooldown.isOnCooldown($0.absoluteString) && $0 != url } ?? url
-            } else if urlCooldown.isOnCooldown(url.absoluteString) {
-                let remaining = Int(urlCooldown.cooldownRemaining(url.absoluteString))
+                var replacement: URL?
+                for candidate in healthyURLs where candidate != url {
+                    let disabled = await urlCooldown.isAutoDisabled(candidate.absoluteString)
+                    let onCooldown = await urlCooldown.isOnCooldown(candidate.absoluteString)
+                    if !disabled && !onCooldown { replacement = candidate; break }
+                }
+                result[index] = replacement ?? url
+            } else if await urlCooldown.isOnCooldown(url.absoluteString) {
+                let remaining = Int(await urlCooldown.cooldownRemaining(url.absoluteString))
                 logger.log("ConcurrentEngine: URL \(urlHost) on cooldown (\(remaining)s left) — rotating", category: .network, level: .warning)
-                result[index] = healthyURLs.first { !urlCooldown.isOnCooldown($0.absoluteString) && !urlCooldown.isAutoDisabled($0.absoluteString) && $0 != url } ?? url
-            } else if !circuitBreaker.shouldAllow(host: urlHost) {
-                let remaining = Int(circuitBreaker.cooldownRemaining(host: urlHost))
+                var replacement: URL?
+                for candidate in healthyURLs where candidate != url {
+                    let onCooldown = await urlCooldown.isOnCooldown(candidate.absoluteString)
+                    let disabled = await urlCooldown.isAutoDisabled(candidate.absoluteString)
+                    if !onCooldown && !disabled { replacement = candidate; break }
+                }
+                result[index] = replacement ?? url
+            } else if await !circuitBreaker.shouldAllow(host: urlHost) {
+                let remaining = Int(await circuitBreaker.cooldownRemaining(host: urlHost))
                 logger.log("ConcurrentEngine: URL \(urlHost) circuit OPEN (\(remaining)s left) — rotating", category: .network, level: .warning)
-                result[index] = healthyURLs.first { circuitBreaker.shouldAllow(host: $0.host ?? "") && !urlCooldown.isOnCooldown($0.absoluteString) && $0 != url } ?? url
+                var replacement: URL?
+                for candidate in healthyURLs where candidate != url {
+                    let allowed = await circuitBreaker.shouldAllow(host: candidate.host ?? "")
+                    let onCooldown = await urlCooldown.isOnCooldown(candidate.absoluteString)
+                    if allowed && !onCooldown { replacement = candidate; break }
+                }
+                result[index] = replacement ?? url
             } else {
                 result[index] = url
             }
@@ -759,7 +777,7 @@ class ConcurrentAutomationEngine {
         let forecast = anomalyForecasting.forecast(key: "login_\(proxyTarget.rawValue)")
         if forecast.softBreakRecommended {
             for url in healthyURLs {
-                if let host = url.host { circuitBreaker.applySoftBreak(host: host) }
+                if let host = url.host { await circuitBreaker.applySoftBreak(host: host) }
             }
         }
         if let reduction = forecast.concurrencyReduction, reduction > 0 {

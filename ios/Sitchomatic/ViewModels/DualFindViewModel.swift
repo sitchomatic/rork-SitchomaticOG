@@ -288,7 +288,7 @@ class DualFindViewModel {
             guard !isStopping else { return }
             let label = "\(siteLabel)-\(i + 1)"
 
-            let session = createPersistentWebSession(site: site, sessionIndex: i)
+            let session = await createPersistentWebSession(site: site, sessionIndex: i)
             webSessions.append(session)
             calibrations.append(nil)
 
@@ -839,7 +839,7 @@ class DualFindViewModel {
 
     // MARK: - Persistent Session Management
 
-    private func createPersistentWebSession(site: LoginTargetSite, sessionIndex: Int) -> LoginSiteWebSession {
+    private func createPersistentWebSession(site: LoginTargetSite, sessionIndex: Int) async -> LoginSiteWebSession {
         let proxyTarget: ProxyRotationService.ProxyTarget = site == .joefortune ? .joe : .ignition
         let netConfig = networkFactory.appWideConfig(for: proxyTarget)
 
@@ -850,7 +850,7 @@ class DualFindViewModel {
         let session = LoginSiteWebSession(targetURL: targetURL, networkConfig: netConfig)
         session.stealthEnabled = stealthEnabled
         session.fingerprintValidationEnabled = automationSettings.fingerprintValidationEnabled
-        session.setUp(wipeAll: true)
+        await session.setUp(wipeAll: true)
 
         return session
     }
@@ -868,7 +868,7 @@ class DualFindViewModel {
                 try? await Task.sleep(for: .seconds(Double(attempt) * 2))
                 if attempt == 2 {
                     session.tearDown(wipeAll: true)
-                    session.setUp(wipeAll: true)
+                    await session.setUp(wipeAll: true)
                 }
             }
         }
@@ -896,7 +896,7 @@ class DualFindViewModel {
         let oldSession = getPersistentSession(site: site, index: index)
         oldSession?.tearDown(wipeAll: true)
 
-        let newSession = createPersistentWebSession(site: site, sessionIndex: index)
+        let newSession = await createPersistentWebSession(site: site, sessionIndex: index)
         setPersistentSession(site: site, index: index, session: newSession)
 
         let loaded = await navigateAndSetupSession(session: newSession, site: site, label: label)

@@ -1,10 +1,8 @@
 import Foundation
 
-@MainActor
-class AdaptiveRetryService {
+actor AdaptiveRetryService {
     static let shared = AdaptiveRetryService()
 
-    private let logger = DebugLogger.shared
     private var siteOutcomeHistory: [String: SiteOutcomeTracker] = [:]
     private let historyWindowSize: Int = 30
 
@@ -82,11 +80,11 @@ class AdaptiveRetryService {
             adjustedBaseDelay = Int(Double(basePolicy.baseDelayMs) * 2.0)
             adjustedRotateProxy = true
             adjustedRotateURL = true
-            logger.log("AdaptiveRetry: site \(host) has dominant \(dominant?.rawValue ?? "") pattern — increased delay to \(adjustedBaseDelay)ms, forcing rotation", category: .automation, level: .info)
+            DebugLogger.logBackground("AdaptiveRetry: site \(host) has dominant \(dominant?.rawValue ?? "") pattern — increased delay to \(adjustedBaseDelay)ms, forcing rotation", category: .automation, level: .info)
         } else if dominant == .connectionFailure && failureRate > 0.7 {
             adjustedRotateProxy = true
             adjustedBaseDelay = Int(Double(basePolicy.baseDelayMs) * 1.5)
-            logger.log("AdaptiveRetry: site \(host) has high connection failure rate (\(Int(failureRate * 100))%) — forcing proxy rotation", category: .automation, level: .info)
+            DebugLogger.logBackground("AdaptiveRetry: site \(host) has high connection failure rate (\(Int(failureRate * 100))%) — forcing proxy rotation", category: .automation, level: .info)
         } else if failureRate < 0.2 && tracker.totalAttempts > 10 {
             adjustedBaseDelay = max(200, basePolicy.baseDelayMs / 2)
         }
@@ -102,7 +100,7 @@ class AdaptiveRetryService {
         )
     }
 
-    func policyFor(_ category: FailureCategory) -> RetryPolicy {
+    nonisolated func policyFor(_ category: FailureCategory) -> RetryPolicy {
         switch category {
         case .idleTimeout:
             return RetryPolicy(
@@ -207,13 +205,13 @@ class AdaptiveRetryService {
         }
     }
 
-    func delayForRetry(policy: RetryPolicy, attempt: Int) -> Int {
+    nonisolated func delayForRetry(policy: RetryPolicy, attempt: Int) -> Int {
         let delay = Double(policy.baseDelayMs) * pow(policy.backoffMultiplier, Double(attempt))
         let jitter = Double.random(in: 0.0...0.3) * delay
         return Int(delay + jitter)
     }
 
-    func categorizeOutcome(_ outcome: LoginOutcome, challengeType: ChallengePageClassifier.ChallengeType? = nil, fieldDetectionFailed: Bool = false, submitFailed: Bool = false, isIdleTimeout: Bool = false) -> FailureCategory {
+    nonisolated func categorizeOutcome(_ outcome: LoginOutcome, challengeType: ChallengePageClassifier.ChallengeType? = nil, fieldDetectionFailed: Bool = false, submitFailed: Bool = false, isIdleTimeout: Bool = false) -> FailureCategory {
         if let challenge = challengeType {
             switch challenge {
             case .rateLimit: return .rateLimited
@@ -243,7 +241,7 @@ class AdaptiveRetryService {
         }
     }
 
-    func shouldRetry(category: FailureCategory, currentAttempt: Int) -> Bool {
+    nonisolated func shouldRetry(category: FailureCategory, currentAttempt: Int) -> Bool {
         let policy = policyFor(category)
         return currentAttempt < policy.maxRetries
     }
@@ -252,11 +250,11 @@ class AdaptiveRetryService {
         let policy = host != nil ? adaptedPolicyFor(category, host: host) : policyFor(category)
         let willRetry = attempt < policy.maxRetries
         let delay = willRetry ? delayForRetry(policy: policy, attempt: attempt) : 0
-        logger.log("AdaptiveRetry: \(category.rawValue) attempt \(attempt)/\(policy.maxRetries) — \(willRetry ? "retrying in \(delay)ms" : "NO MORE RETRIES") rotateURL=\(policy.shouldRotateURL) rotateProxy=\(policy.shouldRotateProxy) recycleWV=\(policy.shouldRecycleWebView) switchPattern=\(policy.shouldSwitchPattern)", category: .automation, level: willRetry ? .info : .warning, sessionId: sessionId)
+        DebugLogger.logBackground("AdaptiveRetry: \(category.rawValue) attempt \(attempt)/\(policy.maxRetries) — \(willRetry ? "retrying in \(delay)ms" : "NO MORE RETRIES") rotateURL=\(policy.shouldRotateURL) rotateProxy=\(policy.shouldRotateProxy) recycleWV=\(policy.shouldRecycleWebView) switchPattern=\(policy.shouldSwitchPattern)", category: .automation, level: willRetry ? .info : .warning)
     }
 
     func resetSiteHistory() {
         siteOutcomeHistory.removeAll()
-        logger.log("AdaptiveRetry: site outcome history cleared", category: .automation, level: .info)
+        DebugLogger.logBackground("AdaptiveRetry: site outcome history cleared", category: .automation, level: .info)
     }
 }

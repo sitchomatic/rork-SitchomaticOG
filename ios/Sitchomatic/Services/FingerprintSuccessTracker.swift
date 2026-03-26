@@ -49,8 +49,7 @@ nonisolated enum FingerprintSessionOutcome: Sendable {
     case connectionFailure
 }
 
-@MainActor
-class FingerprintSuccessTracker {
+actor FingerprintSuccessTracker {
     static let shared = FingerprintSuccessTracker()
 
     private let persistKey = "FingerprintSuccessTracker_v1"

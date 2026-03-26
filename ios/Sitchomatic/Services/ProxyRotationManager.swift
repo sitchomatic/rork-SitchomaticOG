@@ -60,7 +60,7 @@ class ProxyRotationManager {
 
         if case .socks5(let proxy) = config {
             resilience.startVerificationLoop(expectedProxy: proxy)
-            connectionPool.prewarmConnections(count: 2, upstream: proxy)
+            Task { await connectionPool.prewarmConnections(count: 2, upstream: proxy) }
         } else {
             resilience.stopVerificationLoop()
         }

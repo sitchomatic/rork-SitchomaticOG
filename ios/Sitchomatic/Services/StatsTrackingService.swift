@@ -1,7 +1,6 @@
 import Foundation
 
-@MainActor
-class StatsTrackingService {
+actor StatsTrackingService {
     static let shared = StatsTrackingService()
 
     private let storageKey = "lifetime_stats_v1"
@@ -15,7 +14,15 @@ class StatsTrackingService {
     private(set) var dailyCounts: [String: Int] = [:]
 
     init() {
-        loadStats()
+        if let dict = UserDefaults.standard.dictionary(forKey: storageKey) {
+            lifetimeTested = dict["lifetimeTested"] as? Int ?? 0
+            lifetimeWorking = dict["lifetimeWorking"] as? Int ?? 0
+            lifetimeDead = dict["lifetimeDead"] as? Int ?? 0
+            lifetimeRequeued = dict["lifetimeRequeued"] as? Int ?? 0
+            totalBatches = dict["totalBatches"] as? Int ?? 0
+            totalTestDuration = dict["totalTestDuration"] as? TimeInterval ?? 0
+            dailyCounts = dict["dailyCounts"] as? [String: Int] ?? [:]
+        }
     }
 
     func recordBatchResult(working: Int, dead: Int, requeued: Int, duration: TimeInterval) {
@@ -96,13 +103,13 @@ class StatsTrackingService {
         dayKeyFormatter.string(from: date)
     }
 
-    private static let dayKeyFormatter: DateFormatter = {
+    private nonisolated static let dayKeyFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd"
         return f
     }()
 
-    private static let shortDayFormatter: DateFormatter = {
+    private nonisolated static let shortDayFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "EEE"
         return f

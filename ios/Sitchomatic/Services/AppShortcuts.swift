@@ -9,10 +9,10 @@ nonisolated struct CheckStatsIntent: AppIntent {
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
         let stats = StatsTrackingService.shared
-        let tested = stats.lifetimeTested
-        let working = stats.lifetimeWorking
-        let dead = stats.lifetimeDead
-        let rate = stats.lifetimeSuccessRate
+        let tested = await stats.lifetimeTested
+        let working = await stats.lifetimeWorking
+        let dead = await stats.lifetimeDead
+        let rate = await stats.lifetimeSuccessRate
 
         let message = "Lifetime: \(tested) tested, \(working) working, \(dead) dead. Success rate: \(String(format: "%.0f%%", rate * 100))."
         return .result(dialog: "\(message)")

@@ -89,7 +89,7 @@ class LoginSiteWebSession: NSObject {
         return .joe
     }
 
-    func setUp(wipeAll: Bool = true) {
+    func setUp(wipeAll: Bool = true) async {
         if wipeAll {
             let dataStore = WKWebsiteDataStore.default()
             let allTypes = WKWebsiteDataStore.allWebsiteDataTypes()
@@ -118,7 +118,7 @@ class LoginSiteWebSession: NSObject {
         if stealthEnabled {
             let stealth = PPSRStealthService.shared
             let host = targetURL.host ?? ""
-            let (profile, profileIdx) = stealth.nextProfileForHost(host)
+            let (profile, profileIdx) = await stealth.nextProfileForHost(host)
             self.stealthProfile = profile
             self.activeProfileIndex = profileIdx
 
@@ -194,7 +194,7 @@ class LoginSiteWebSession: NSObject {
             if attempt < maxRetries - 1 {
                 onFingerprintLog?("Rotating stealth profile to reduce FP score...", .info)
                 let stealth = PPSRStealthService.shared
-                let newProfile = stealth.nextProfile()
+                let newProfile = await stealth.nextProfile()
                 self.stealthProfile = newProfile
                 webView?.customUserAgent = newProfile.userAgent
                 let newJS = stealth.createStealthUserScript(profile: newProfile)

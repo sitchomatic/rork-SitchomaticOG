@@ -236,7 +236,7 @@ class AutopilotActionExecutor {
         }
 
         let stealth = PPSRStealthService.shared
-        let newProfile = stealth.nextProfile()
+        let newProfile = await stealth.nextProfile()
         webView.customUserAgent = newProfile.userAgent
         let newJS = stealth.createStealthUserScript(profile: newProfile)
         webView.configuration.userContentController.removeAllUserScripts()
@@ -255,7 +255,7 @@ class AutopilotActionExecutor {
         }
 
         session.tearDown(wipeAll: true)
-        session.setUp(wipeAll: true)
+        await session.setUp(wipeAll: true)
 
         return ExecutionResult(action: .fullSessionReset, success: true, detail: "Full session reset with clean identity", durationMs: 0)
     }

@@ -114,7 +114,7 @@ class BPointWebSession: NSObject {
 
         if stealthEnabled {
             let stealth = PPSRStealthService.shared
-            let profile = stealth.nextProfile()
+            let profile = stealth.nextProfileSync()
             self.stealthProfile = profile
             let userScript = stealth.createStealthUserScript(profile: profile)
             config.userContentController.addUserScript(userScript)

@@ -86,7 +86,7 @@ class DisabledCheckService {
         for attempt in 1...3 {
             let session = LoginSiteWebSession(targetURL: forgotPasswordURL)
             session.stealthEnabled = true
-            session.setUp(wipeAll: true)
+            await session.setUp(wipeAll: true)
 
             let loaded = await session.loadPage(timeout: TimeoutResolver.resolveAutomationTimeout(20))
             guard loaded else {

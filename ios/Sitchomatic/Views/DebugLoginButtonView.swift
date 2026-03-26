@@ -367,7 +367,7 @@ struct DebugLoginButtonView: View {
         Task {
             let newSession = LoginSiteWebSession(targetURL: url)
             newSession.stealthEnabled = vm.stealthEnabled
-            newSession.setUp(wipeAll: true)
+            await newSession.setUp(wipeAll: true)
 
             let loaded = await newSession.loadPage(timeout: AutomationSettings.minimumTimeoutSeconds)
             if loaded {

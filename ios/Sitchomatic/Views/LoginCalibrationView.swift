@@ -402,7 +402,7 @@ class CalibrationWebViewCoordinator: NSObject, WKNavigationDelegate, WKScriptMes
         config.userContentController.add(self, name: "calibrationTap")
 
         let stealth = PPSRStealthService.shared
-        let profile = stealth.nextProfile()
+        let profile = stealth.nextProfileSync()
         let stealthScript = stealth.createStealthUserScript(profile: profile)
         config.userContentController.addUserScript(stealthScript)
 

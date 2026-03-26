@@ -115,13 +115,13 @@ class AIPredictiveBatchPreOptimizer {
         currentTimeout: TimeInterval,
         stealthEnabled: Bool
     ) async -> BatchPreOptimizationReport {
-        let proxyHealth = assessProxyPoolHealth(target: proxyTarget)
-        let urlHealth = assessURLPoolHealth(urls: urls)
+        let proxyHealth = await assessProxyPoolHealth(target: proxyTarget)
+        let urlHealth = await assessURLPoolHealth(urls: urls)
         let credQuality = assessCredentialQuality(credentials: credentials)
         let todScore = assessTimeOfDay()
         let memoryScore = assessMemoryPressure()
 
-        let urlRankings = rankURLs(urls: urls)
+        let urlRankings = await rankURLs(urls: urls)
         let proxyWarnings = generateProxyWarnings(target: proxyTarget, health: proxyHealth)
         let credInsights = generateCredentialInsights(credentials: credentials)
 
@@ -274,7 +274,7 @@ class AIPredictiveBatchPreOptimizer {
         logger.log("BatchPreOptimizer: all data RESET", category: .automation, level: .warning)
     }
 
-    private func assessProxyPoolHealth(target: ProxyRotationService.ProxyTarget) -> Double {
+    private func assessProxyPoolHealth(target: ProxyRotationService.ProxyTarget) async -> Double {
         let proxyService = ProxyRotationService.shared
         let activeProxy = proxyService.nextWorkingProxy(for: target)
         let deviceProxy = DeviceProxyService.shared
@@ -284,17 +284,17 @@ class AIPredictiveBatchPreOptimizer {
         if NodeMavenService.shared.isEnabled { health += 0.2 }
         if activeProxy != nil { health += 0.1 }
 
-        let qualityScore = proxyQuality.scoreFor(proxyId: target.rawValue)
+        let qualityScore = await proxyQuality.scoreFor(proxyId: target.rawValue)
         health = (health * 0.5) + (qualityScore * 0.5)
 
         return min(1.0, max(0.1, health))
     }
 
-    private func assessURLPoolHealth(urls: [URL]) -> Double {
+    private func assessURLPoolHealth(urls: [URL]) async -> Double {
         guard !urls.isEmpty else { return 0.1 }
         var totalScore = 0.0
         for url in urls {
-            let sc = urlQuality.scoreFor(urlString: url.absoluteString)
+            let sc = await urlQuality.scoreFor(urlString: url.absoluteString)
             totalScore += sc
         }
         let avgScore = totalScore / Double(urls.count)
@@ -344,16 +344,18 @@ class AIPredictiveBatchPreOptimizer {
         return 0.2
     }
 
-    private func rankURLs(urls: [URL]) -> [(url: String, score: Double, reason: String)] {
-        urls.map { url in
-            let score = urlQuality.scoreFor(urlString: url.absoluteString)
+    private func rankURLs(urls: [URL]) async -> [(url: String, score: Double, reason: String)] {
+        var results: [(url: String, score: Double, reason: String)] = []
+        for url in urls {
+            let score = await urlQuality.scoreFor(urlString: url.absoluteString)
             let host = url.host ?? url.absoluteString
             let reason: String
             if score >= 0.7 { reason = "High quality — reliable responses" }
             else if score >= 0.4 { reason = "Moderate — some failures recently" }
             else { reason = "Low quality — frequent failures or high latency" }
-            return (url: host, score: score, reason: reason)
-        }.sorted { $0.score > $1.score }
+            results.append((url: host, score: score, reason: reason))
+        }
+        return results.sorted { $0.score > $1.score }
     }
 
     private func generateProxyWarnings(target: ProxyRotationService.ProxyTarget, health: Double) -> [String] {

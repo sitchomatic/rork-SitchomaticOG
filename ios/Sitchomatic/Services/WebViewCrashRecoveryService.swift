@@ -66,7 +66,7 @@ class WebViewCrashRecoveryService {
         try? await Task.sleep(for: .milliseconds(delay))
 
         session.tearDown(wipeAll: true)
-        session.setUp(wipeAll: true)
+        await session.setUp(wipeAll: true)
 
         let loaded = await session.loadPage(timeout: 30)
         if loaded {

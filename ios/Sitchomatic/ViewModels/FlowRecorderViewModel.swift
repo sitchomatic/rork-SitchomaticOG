@@ -328,7 +328,7 @@ class FlowRecorderViewModel {
     func validateFingerprint() {
         guard let webView = activeWebView else { return }
         Task {
-            let profile = PPSRStealthService.shared.nextProfile()
+            let profile = await PPSRStealthService.shared.nextProfile()
             let score = await FingerprintValidationService.shared.validate(in: webView, profileSeed: profile.seed)
             fingerprintScore = score.formattedScore
         }

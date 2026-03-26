@@ -1,16 +1,26 @@
 import Foundation
 
-@MainActor
-class URLQualityScoringService {
+actor URLQualityScoringService {
     static let shared = URLQualityScoringService()
 
-    private let logger = DebugLogger.shared
     private let persistKey = "url_quality_scoring_v2"
     private var urlScores: [String: URLQualityScore] = [:]
     private let decayHalfLifeSeconds: TimeInterval = 3600
 
     init() {
-        loadScores()
+        if let data = UserDefaults.standard.data(forKey: persistKey),
+           let dict = try? JSONSerialization.jsonObject(with: data) as? [String: [String: Any]] {
+            for (host, values) in dict {
+                var score = URLQualityScore(host: host)
+                score.totalAttempts = values["totalAttempts"] as? Int ?? 0
+                score.blankPageCount = values["blankPageCount"] as? Int ?? 0
+                score.loginSuccessCount = values["loginSuccessCount"] as? Int ?? 0
+                if let ts = values["lastUpdated"] as? TimeInterval {
+                    score.lastUpdated = Date(timeIntervalSince1970: ts)
+                }
+                urlScores[host] = score
+            }
+        }
     }
 
     struct URLQualityScore {
@@ -180,7 +190,7 @@ class URLQualityScoringService {
     func resetAll() {
         urlScores.removeAll()
         persistScores()
-        logger.log("URLQualityScoring: all scores reset", category: .network, level: .info)
+        DebugLogger.logBackground("URLQualityScoring: all scores reset", category: .network, level: .info)
     }
 
     private func trimEntries(_ score: inout URLQualityScore) {

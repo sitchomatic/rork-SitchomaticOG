@@ -22,7 +22,7 @@ struct FlowRecorderWebView: UIViewRepresentable {
         let contentController = WKUserContentController()
 
         let stealth = PPSRStealthService.shared
-        let profile = stealth.nextProfile()
+        let profile = stealth.nextProfileSync()
         let stealthScript = WKUserScript(
             source: stealth.buildComprehensiveStealthJSPublic(profile: profile),
             injectionTime: .atDocumentStart,

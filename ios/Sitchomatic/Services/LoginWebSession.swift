@@ -132,7 +132,7 @@ class LoginWebSession: NSObject {
 
         if stealthEnabled {
             let stealth = PPSRStealthService.shared
-            let profile = stealth.nextProfile()
+            let profile = stealth.nextProfileSync()
             self.stealthProfile = profile
 
             let userScript = stealth.createStealthUserScript(profile: profile)
@@ -202,7 +202,7 @@ class LoginWebSession: NSObject {
             if attempt < maxRetries - 1 {
                 onFingerprintLog?("Rotating stealth profile to reduce FP score...", .info)
                 let stealth = PPSRStealthService.shared
-                let newProfile = stealth.nextProfile()
+                let newProfile = await stealth.nextProfile()
                 self.stealthProfile = newProfile
                 webView?.customUserAgent = newProfile.userAgent
                 let newJS = stealth.createStealthUserScript(profile: newProfile)

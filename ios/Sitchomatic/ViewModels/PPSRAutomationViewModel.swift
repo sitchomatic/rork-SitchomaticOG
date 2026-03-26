@@ -1282,7 +1282,7 @@ class PPSRAutomationViewModel {
         backgroundService.endExtendedBackgroundExecution()
 
         let batchDuration = batchStartTime.map { Date().timeIntervalSince($0) } ?? 0
-        statsService.recordBatchResult(working: working, dead: dead, requeued: requeued, duration: batchDuration)
+        Task { await self.statsService.recordBatchResult(working: working, dead: dead, requeued: requeued, duration: batchDuration) }
         batchStartTime = nil
 
         if stoppedEarly {

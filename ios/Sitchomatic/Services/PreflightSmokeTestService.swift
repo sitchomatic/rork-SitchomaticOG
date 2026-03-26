@@ -52,7 +52,7 @@ class PreflightSmokeTestService {
 
         let session = LoginSiteWebSession(targetURL: targetURL, networkConfig: networkConfig, proxyTarget: proxyTarget)
         session.stealthEnabled = stealthEnabled
-        session.setUp(wipeAll: true)
+        await session.setUp(wipeAll: true)
         defer { session.tearDown(wipeAll: true) }
 
         let loaded = await session.loadPage(timeout: timeout)

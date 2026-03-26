@@ -377,7 +377,7 @@ struct AutomationSettingsView: View {
 
                         let session = LoginSiteWebSession(targetURL: url)
                         session.stealthEnabled = vm.stealthEnabled
-                        session.setUp(wipeAll: true)
+                        await session.setUp(wipeAll: true)
                         let loaded = await session.loadPage(timeout: AutomationSettings.minimumTimeoutSeconds)
                         if loaded {
                             if let cal = await session.autoCalibrate() {
