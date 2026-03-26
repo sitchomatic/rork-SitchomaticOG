@@ -55,8 +55,8 @@ struct UnifiedSessionFeedView: View {
 
     private var filteredSessions: [DualSiteSession] {
         switch filterOption {
-        case .all: vm.sessions
-        case .active: vm.activeSessions
+        case .all: return vm.sessions
+        case .active: return vm.activeSessions
         default:
             guard let target = filterOption.matchingSiteResult else { return vm.sessions }
             return vm.sessions.filter { $0.hasSiteResult(target) }
@@ -65,8 +65,8 @@ struct UnifiedSessionFeedView: View {
 
     private func countFor(_ option: SessionFilterOption) -> Int {
         switch option {
-        case .all: vm.sessions.count
-        case .active: vm.activeSessions.count
+        case .all: return vm.sessions.count
+        case .active: return vm.activeSessions.count
         default:
             guard let target = option.matchingSiteResult else { return 0 }
             return vm.sessions.filter { $0.hasSiteResult(target) }.count
