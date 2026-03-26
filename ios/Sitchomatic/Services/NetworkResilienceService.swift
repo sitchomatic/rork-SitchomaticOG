@@ -316,7 +316,9 @@ class NetworkResilienceService {
                 recordRegionLatency(region: region, latencyMs: latencyMs)
                 return latencyMs
             }
-        } catch {}
+        } catch {
+            // Probe failure returns sentinel latency so caller picks a different region
+        }
         return 9999
     }
 

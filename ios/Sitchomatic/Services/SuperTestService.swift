@@ -505,7 +505,9 @@ class SuperTestService {
                let score = json["score"] as? Int {
                 return score
             }
-        } catch {}
+        } catch {
+            // JS evaluation can fail when page is still loading; return 0 as fallback score
+        }
 
         return 0
     }

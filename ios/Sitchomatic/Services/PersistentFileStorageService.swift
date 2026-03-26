@@ -130,14 +130,14 @@ class PersistentFileStorageService {
             try? configJSON.data(using: .utf8)?.write(to: configDir.appendingPathComponent("config_\(ts).json"))
 
             if !credEntries.isEmpty {
-                if let data = try? JSONEncoder().encode(credEntries) {
+                if let data = try? encoder.encode(credEntries) {
                     try? data.write(to: credDir.appendingPathComponent("credentials.json"))
                 }
                 try? workingText.data(using: .utf8)?.write(to: credDir.appendingPathComponent("working.txt"))
             }
 
             if !cardEntries.isEmpty {
-                if let data = try? JSONEncoder().encode(cardEntries) {
+                if let data = try? encoder.encode(cardEntries) {
                     try? data.write(to: cardDir.appendingPathComponent("cards.json"))
                 }
             }
@@ -158,7 +158,7 @@ class PersistentFileStorageService {
             let allLines = recentAll.map { "[\($0.level.rawValue)] [\($0.category.rawValue)] \(DateFormatters.fullTimestamp.string(from: $0.timestamp)) \($0.message)" }
             try? allLines.joined(separator: "\n").data(using: .utf8)?.write(to: dbgDir.appendingPathComponent("full_log.log"))
 
-            if !flows.isEmpty, let data = try? JSONEncoder().encode(flows) {
+            if !flows.isEmpty, let data = try? encoder.encode(flows) {
                 try? data.write(to: flDir.appendingPathComponent("recorded_flows.json"))
             }
 
@@ -167,7 +167,7 @@ class PersistentFileStorageService {
             }
 
             let manifest = ScreenshotManifest(savedAt: Date().timeIntervalSince1970, note: "Screenshots are stored in-memory during runtime.")
-            if let data = try? JSONEncoder().encode(manifest) {
+            if let data = try? encoder.encode(manifest) {
                 try? data.write(to: ssDir.appendingPathComponent("manifest.json"))
             }
 

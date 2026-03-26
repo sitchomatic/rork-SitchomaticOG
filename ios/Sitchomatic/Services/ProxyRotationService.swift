@@ -1046,7 +1046,9 @@ class ProxyRotationService {
                         if let http = response as? HTTPURLResponse, http.statusCode == 200, !data.isEmpty {
                             return true
                         }
-                    } catch { }
+                    } catch {
+                        // Network request failed; treat proxy as unreachable
+                    }
                     return false
                 }
             }
