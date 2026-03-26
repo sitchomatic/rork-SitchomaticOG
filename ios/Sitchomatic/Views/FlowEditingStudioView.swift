@@ -1642,13 +1642,13 @@ struct FlowSettingsView: View {
 
             Section("Viewport") {
                 Toggle(isOn: Binding(
-                    get: { settings.useWebViewPoolFingerprints },
+                    get: { settings.smartFingerprintReuse },
                     set: { newValue in
-                        settings.useWebViewPoolFingerprints = newValue
+                        settings.smartFingerprintReuse = newValue
                         if newValue { settings.randomizeViewportSize = false }
                     }
                 )) {
-                    Text("WebView Pool Fingerprints")
+                    Text("Smart Fingerprint Reuse")
                 }
                 Stepper("Width: \(settings.viewportWidth)px", value: $settings.viewportWidth, in: 320...1920, step: 10)
                 Stepper("Height: \(settings.viewportHeight)px", value: $settings.viewportHeight, in: 480...1080, step: 10)
@@ -1656,7 +1656,7 @@ struct FlowSettingsView: View {
                     get: { settings.randomizeViewportSize },
                     set: { newValue in
                         settings.randomizeViewportSize = newValue
-                        if newValue { settings.useWebViewPoolFingerprints = false }
+                        if newValue { settings.smartFingerprintReuse = false }
                     }
                 )) {
                     Text("Randomize Viewport")

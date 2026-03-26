@@ -213,7 +213,7 @@ nonisolated struct AutomationTemplate: Codable, Sendable, Identifiable {
             s.clearCacheBetweenAttempts = true
             s.clearIndexedDBBetweenAttempts = true
             s.freshWebViewPerAttempt = true
-            s.useWebViewPoolFingerprints = false
+            s.smartFingerprintReuse = false
             s.randomizeViewportSize = true
             s.viewportSizeVariancePx = 80
             s.delayRandomizationEnabled = true
@@ -291,7 +291,6 @@ nonisolated struct AutomationTemplate: Codable, Sendable, Identifiable {
             s.clearLocalStorageBetweenAttempts = false
             s.clearCacheBetweenAttempts = false
             s.freshWebViewPerAttempt = false
-            s.reuseWebViewPoolSize = 5
             s.stealthJSInjection = true
             s.fingerprintSpoofing = true
             s.fallbackToVisionMLClick = true

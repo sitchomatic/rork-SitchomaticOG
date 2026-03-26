@@ -1,91 +1,69 @@
-# Replace Static Concurrency with AI-Driven Adaptive Concurrency System
+# Delete WebViewPool & Add Smart Fingerprint Reuse
 
-## What Changes
+## Summary
 
-Replace the current manual concurrency slider (1–8) with an intelligent system that **always starts at 1 session** and automatically ramps up/down based on live AI analysis, capped at a user-chosen maximum.
-
----
-
-## Features
-
-- **Always starts at 1** — every batch begins with a single session pair, then the system watches and decides when to add more
-- **AI-first decisions** — calls the Rork AI engine for every major concurrency change, with a fast local heuristic as instant fallback when offline or between AI calls
-- **Cautious ramp-up** — increases by 1 session every ~30 seconds of stable, successful performance
-- **Instant ramp-down** — drops immediately if problems are detected (timeouts, page failures, memory pressure, network instability)
-- **Smart factor analysis** — the AI considers:
-  - **Memory** — current usage, growth rate, death spiral detection
-  - **Network** — latency trends, connection failure rate, timeout rate
-  - **Testing success** — are sessions completing with valid results (success/no-acc/perm/temp) vs failing (timeouts, page-not-loading, retries needed)
-  - **App state** — foreground vs background (reduce when backgrounded)
-  - **Stability score** — composite of all factors
-- **Max cap presets** — user picks from preset buttons: Conservative (2), Balanced (4), Performance (6), Aggressive (8), Maximum (10)
-- **Full live dashboard** during a batch showing:
-  - Current live worker count vs max cap (e.g. "▶ 3/8 workers")
-  - AI reasoning text (e.g. "Ramping up — 4 consecutive successes, memory stable")
-  - Mini sparkline graph showing concurrency level over time
-  - Factor score badges: Memory, Network, Success Rate, Stability — each with a colored indicator
+Delete the WebViewPool entirely. Replace it with a lightweight active-count tracker (diagnostics only) and a smart fingerprint reuse system that remembers which stealth profiles led to successful outcomes and prioritises them.
 
 ---
 
-## Design
+## Part 1: Delete WebViewPool
 
-### Concurrency Control (replaces the old slider)
-
-- **Before batch starts**: Row of 5 preset capsule buttons (2 / 4 / 6 / 8 / 10) with the selected one highlighted in cyan — labeled "MAX SESSION CAP"
-- Small helper text: "AI starts at 1 and ramps up to this cap based on live conditions"
-- The START button sits below the presets
-
-### Live AI Dashboard (visible during batch run)
-
-- **Card with dark background** at the top of the feed, showing:
-  - Large "▶ 3 / 8" display (current / cap) with a pulsing dot when actively adjusting
-  - AI reasoning line in monospaced font below
-  - **Mini concurrency graph** — a small sparkline (last 60 data points) showing the concurrency level over time, green when ramping up, orange when stable, red when dropping
-  - **Factor badges row** — 4 small pills showing: 🧠 Memory (green/yellow/red), 🌐 Network (green/yellow/red), ✅ Success (percentage), ⚡ Stability (score)
-  - Tap the card to expand a sheet with full AI analysis history and detailed factor breakdown
-
-### AI Analysis History Sheet
-
-- Scrollable list of every concurrency decision with timestamp, old→new value, reasoning, and which factors drove the change
-- Each entry color-coded: green for ramp-up, orange for hold, red for ramp-down
+- **Delete** `WebViewPool.swift` (410 lines — pooling, pre-warming, leak detection, stale reaping all gone)
+- **Create** `WebViewTracker.swift` — a tiny service (~40 lines) with:
+  - Active WebView count (increment on create, decrement on teardown)
+  - Process termination counter
+  - Diagnostic summary string
+  - `reset()` for emergency cleanup
+  - No pooling, no pre-warming, no background tasks, no leak detection loops
 
 ---
 
-## Technical Approach
+## Part 2: Update All References (~20 files)
 
-### New Service: `AdaptiveConcurrencyEngine`
+Each file that currently calls `WebViewPool.shared` gets a minimal replacement:
 
-- Replaces the current static `maxConcurrency` usage in `UnifiedSessionViewModel`
-- Starts monitoring when batch begins, stops when batch ends
-- Maintains a rolling window of session outcomes, latency samples, memory snapshots
-- Every 10 seconds: runs local heuristic for instant decisions
-- Every 30 seconds (or on significant events): calls Rork AI for deeper analysis
-- Publishes `liveConcurrency`, `maxCap`, `currentReasoning`, `factorScores`, and `concurrencyHistory` for the UI to bind to
+- **AppStabilityCoordinator** — `WebViewPool.shared.activeCount` → `WebViewTracker.shared.activeCount`; remove `forceResetCount()`, `handleMemoryPressure()`, `drainPreWarmed()` calls
+- **CrashProtectionService** — same pattern: use tracker for count, remove pool cleanup calls
+- **AIPredictiveConcurrencyGovernor** — `.activeCount` → tracker
+- **ConcurrentAutomationEngine** — remove `preWarm()` call entirely
+- **WebViewCrashRecoveryService** — `reportProcessTermination()` → tracker
+- **LoginSiteWebSession** — `reportProcessTermination()` → tracker; add `WebViewTracker.shared.incrementActive()` on setUp, `decrementActive()` on tearDown
+- **LoginViewModel** — `forceResetCount()` → `WebViewTracker.shared.reset()`
+- **PPSRAutomationViewModel** — same
+- **SitchomaticApp** — remove `WebViewPool.shared.handleMemoryPressure()` from memory handler
+- **MemoryPressureMonitor** — remove `emergencyPurgeAll()` call
+- **NetworkRepairService** — remove `emergencyPurgeAll()` call
+- **AutomationActor** — remove stored `webViewPool` reference
 
-### Changes to `UnifiedSessionViewModel`
+---
 
-- Remove `maxConcurrency` as a simple integer — replace with `maxConcurrencyCap` (the user-set ceiling) and `liveConcurrency` (the AI-controlled current value)
-- `startBatch()` always begins with liveConcurrency = 1
-- The batch loop reads `liveConcurrency` from the engine instead of a fixed number
-- Engine adjusts liveConcurrency up/down in real-time during the batch
+## Part 3: Smart Fingerprint Reuse
 
-### Changes to `UnifiedSessionFeedView`
+Replace the old pool settings with an intelligent fingerprint reuse system:
 
-- Remove the old +/− slider `concurrencyControl`
-- Replace with preset cap buttons + the live AI dashboard card during runs
+- **Rename** `useWebViewPoolFingerprints` → `smartFingerprintReuse` (defaults `true`)
+- **Remove** `reuseWebViewPoolSize` (no longer relevant — there's no pool size)
+- **Create** `FingerprintSuccessTracker` (~80 lines) — a small service that:
+  - Records which `PPSRStealthService` profile index was used for each session outcome
+  - Tracks success rate per profile index (success / permBan / tempLock / noAccount / timeout)
+  - When `smartFingerprintReuse` is enabled, `PPSRStealthService.nextProfile()` prioritises profiles with higher historical success rates instead of round-robin
+  - Persists the success stats to UserDefaults so they survive app restarts
+  - Falls back to round-robin when no stats exist yet
+- **Update UI** in AutomationSettingsView:
+  - Replace "WebView Pool: 24" stepper → removed entirely
+  - Replace "WebView Pool Fingerprints" toggle → "Smart Fingerprint Reuse" toggle with subtitle "Prioritise fingerprint profiles with higher success rates"
+- **Update UI** in FlowEditingStudioView:
+  - Same toggle rename
 
-### Enhance existing `AIPredictiveConcurrencyGovernor`
+---
 
-- Refactor to support the "start at 1, ramp up" model
-- Add foreground/background awareness via `UIApplication.shared.applicationState`
-- Feed richer data to the Rork AI (session outcomes by type, not just success/fail)
-- Track concurrency history for the sparkline graph
+## What Stays Untouched
 
-### Files affected:
-
-- **New**: `AdaptiveConcurrencyEngine.swift` (Service)
-- **New**: `AdaptiveConcurrencyDashboardView.swift` (View — the live dashboard card + expanded sheet)
-- **Modified**: `UnifiedSessionViewModel.swift` — use adaptive engine instead of static concurrency
-- **Modified**: `UnifiedSessionFeedView.swift` — replace concurrency slider with presets + dashboard
-- **Modified**: `AIPredictiveConcurrencyGovernor.swift` — enhance with ramp-from-1 logic and richer factor tracking
+- **PPSRStealthService** — all 10 trusted fingerprint profiles stay exactly as-is
+- **LoginSiteWebSession** — still creates WebViews directly with stealth profiles (the core creation path doesn't change)
+- **DualSiteWorkerService** — unchanged
+- **UnifiedSessionViewModel** — unchanged
+- **AdaptiveConcurrencyEngine** — unchanged
+- All PPSR/CarCheck functionality — untouched
+- No MainActor changes on other services (conservative scope)
 

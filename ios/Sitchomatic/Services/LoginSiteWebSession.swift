@@ -129,11 +129,13 @@ class LoginSiteWebSession: NSObject {
             webView.navigationDelegate = self
             webView.customUserAgent = profile.userAgent
             self.webView = webView
+            WebViewTracker.shared.incrementActive()
         } else {
             let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 390, height: 844), configuration: config)
             webView.navigationDelegate = self
             webView.customUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
             self.webView = webView
+            WebViewTracker.shared.incrementActive()
         }
     }
 
@@ -151,6 +153,9 @@ class LoginSiteWebSession: NSObject {
                 wv.configuration.userContentController.removeAllUserScripts()
             }
             wv.navigationDelegate = nil
+        }
+        if webView != nil {
+            WebViewTracker.shared.decrementActive()
         }
         webView = nil
         isPageLoaded = false
@@ -1965,7 +1970,7 @@ extension LoginSiteWebSession: WKNavigationDelegate {
             self.processTerminated = true
             self.lastNavigationError = "WebKit content process terminated (crash)"
             self.logger.log("LoginSiteWebSession: WKWebView content process TERMINATED — controlled recovery needed", category: .webView, level: .critical)
-            WebViewPool.shared.reportProcessTermination()
+            WebViewTracker.shared.reportProcessTermination()
             self.resolvePageLoad(false)
             self.onProcessTerminated?()
         }

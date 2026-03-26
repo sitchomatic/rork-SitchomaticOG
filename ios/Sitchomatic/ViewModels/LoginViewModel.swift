@@ -1041,7 +1041,7 @@ class LoginViewModel {
         batchTask = nil
         secondaryBatchTask = nil
         forceFinalizeBatch()
-        WebViewPool.shared.forceResetCount()
+        WebViewTracker.shared.reset()
     }
 
     private func startPauseCountdown() {

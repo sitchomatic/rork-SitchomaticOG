@@ -81,7 +81,7 @@ final class AppStabilityCoordinator {
     private func performHealthCheck() {
         let memMB = crashProtection.currentMemoryUsageMB()
         let growthRate = crashProtection.currentGrowthRateMBPerSec
-        let webViewCount = WebViewPool.shared.activeCount
+        let webViewCount = WebViewTracker.shared.activeCount
         let loginRunning = LoginViewModel.shared.isRunning
         let ppsrRunning = PPSRAutomationViewModel.shared.isRunning
         let deathSpiral = crashProtection.isMemoryDeathSpiral
@@ -140,7 +140,7 @@ final class AppStabilityCoordinator {
 
     private func handleWebViewLeak(count: Int) {
         logger.log("StabilityCoordinator: WebView leak suspected — \(count) active with no batch running. Force resetting.", category: .system, level: .error)
-        WebViewPool.shared.forceResetCount()
+        WebViewTracker.shared.reset()
     }
 
     private func handleDeathSpiralDuringBatch() {
@@ -153,7 +153,6 @@ final class AppStabilityCoordinator {
     private func handleProlongedDegradation() {
         logger.log("StabilityCoordinator: prolonged degradation (\(consecutiveUnhealthyChecks) checks) — forcing cleanup", category: .system, level: .critical)
 
-        WebViewPool.shared.handleMemoryPressure()
         DebugLogger.shared.trimEntries(to: 1000)
 
         NetworkResilienceService.shared.invalidateSharedSessions()
@@ -256,11 +255,11 @@ final class AppStabilityCoordinator {
         logger.log("StabilityCoordinator: app returning to foreground — running health check", category: .system, level: .info)
         performHealthCheck()
 
-        let webViewCount = WebViewPool.shared.activeCount
+        let webViewCount = WebViewTracker.shared.activeCount
         let anyRunning = LoginViewModel.shared.isRunning || PPSRAutomationViewModel.shared.isRunning
         if webViewCount > 0 && !anyRunning {
             logger.log("StabilityCoordinator: orphaned WebViews after background — cleaning up", category: .system, level: .warning)
-            WebViewPool.shared.forceResetCount()
+            WebViewTracker.shared.reset()
         }
     }
 
@@ -271,7 +270,7 @@ final class AppStabilityCoordinator {
         PPSRAutomationViewModel.shared.persistCardsNow()
         DebugLogger.shared.persistLatestLog()
 
-        WebViewPool.shared.drainPreWarmed()
+
     }
 
     func safeExecute<T: Sendable>(_ label: String, fallback: T, operation: @MainActor () async throws -> T) async -> T {

@@ -95,7 +95,7 @@ final class CrashProtectionService {
 
     var diagnosticSummary: String {
         let mb = currentMemoryUsageMB()
-        let webViews = WebViewPool.shared.activeCount
+        let webViews = WebViewTracker.shared.activeCount
         let growth = String(format: "%.1f", memoryMonitor.growthRateMBPerSecond)
         let spiral = memoryMonitor.deathSpiralDetected ? " SPIRAL!" : ""
         return "Memory: \(mb)MB (\(growth)MB/s\(spiral)) | WebViews: \(webViews) | EmergencyKills: \(emergencyBatchKillCount) | Crashes: \(crashCount) | ConsecutiveCritical: \(memoryMonitor.consecutiveCriticalChecks)"
@@ -175,11 +175,7 @@ final class CrashProtectionService {
             DebugLogger.shared.handleMemoryPressure()
         }
 
-        if tier.drainPreWarmed {
-            WebViewPool.shared.drainPreWarmed()
-        } else if tier.aggressiveCleanup {
-            WebViewPool.shared.handleMemoryPressure()
-        }
+
 
         if let limits = tier.screenshotCacheLimits {
             ScreenshotCacheService.shared.setMaxCacheCounts(memory: limits.memory, disk: limits.disk)
@@ -271,7 +267,7 @@ final class CrashProtectionService {
         === PRE-CRASH DIAGNOSTICS ===
         Timestamp: \(Date())
         Memory: \(memMB)MB (growth: \(growth)MB/s)
-        WebViews: \(WebViewPool.shared.activeCount)
+        WebViews: \(WebViewTracker.shared.activeCount)
         Login Batch: \(LoginViewModel.shared.isRunning ? "RUNNING" : "idle")
         PPSR Batch: \(PPSRAutomationViewModel.shared.isRunning ? "RUNNING" : "idle")
         Death Spiral: \(memoryMonitor.deathSpiralDetected)

@@ -1705,9 +1705,7 @@ struct AutomationSettingsView: View {
             }
             .tint(.orange)
 
-            if !vm.automationSettings.freshWebViewPerAttempt {
-                Stepper("WebView Pool: \(vm.automationSettings.reuseWebViewPoolSize)", value: $vm.automationSettings.reuseWebViewPoolSize, in: 1...24)
-            }
+
             Stepper("Memory Limit: \(vm.automationSettings.webViewMemoryLimitMB)MB", value: $vm.automationSettings.webViewMemoryLimitMB, in: 256...6144, step: 256)
             Toggle("JavaScript Enabled", isOn: $vm.automationSettings.webViewJSEnabled).tint(accentColor)
             Toggle("Image Loading", isOn: $vm.automationSettings.webViewImageLoadingEnabled).tint(accentColor)
@@ -1778,15 +1776,15 @@ struct AutomationSettingsView: View {
     private var viewportWindowSection: some View {
         Section {
             Toggle(isOn: Binding(
-                get: { vm.automationSettings.useWebViewPoolFingerprints },
+                get: { vm.automationSettings.smartFingerprintReuse },
                 set: { newValue in
-                    vm.automationSettings.useWebViewPoolFingerprints = newValue
+                    vm.automationSettings.smartFingerprintReuse = newValue
                     if newValue { vm.automationSettings.randomizeViewportSize = false }
                 }
             )) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("WebView Pool Fingerprints")
-                    Text("Use trusted fingerprint pool for viewport & UA").font(.caption2).foregroundStyle(.secondary)
+                    Text("Smart Fingerprint Reuse")
+                    Text("Prioritise fingerprint profiles with higher success rates").font(.caption2).foregroundStyle(.secondary)
                 }
             }
             .tint(.purple)
@@ -1798,7 +1796,7 @@ struct AutomationSettingsView: View {
                 get: { vm.automationSettings.randomizeViewportSize },
                 set: { newValue in
                     vm.automationSettings.randomizeViewportSize = newValue
-                    if newValue { vm.automationSettings.useWebViewPoolFingerprints = false }
+                    if newValue { vm.automationSettings.smartFingerprintReuse = false }
                 }
             )) {
                 VStack(alignment: .leading, spacing: 2) {

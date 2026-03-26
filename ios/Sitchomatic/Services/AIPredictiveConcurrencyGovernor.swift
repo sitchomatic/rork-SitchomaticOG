@@ -144,7 +144,7 @@ class AIPredictiveConcurrencyGovernor {
     private func performCheck() async {
         let memMB = crashProtection.currentMemoryUsageMB()
         let growthRate = crashProtection.currentGrowthRateMBPerSec
-        let webViewCount = WebViewPool.shared.activeCount
+        let webViewCount = WebViewTracker.shared.activeCount
         let loginRunning = LoginViewModel.shared.isRunning
         let ppsrRunning = PPSRAutomationViewModel.shared.isRunning
 
@@ -434,7 +434,7 @@ class AIPredictiveConcurrencyGovernor {
 
     var diagnosticSummary: String {
         let mem = crashProtection.currentMemoryUsageMB()
-        let wv = WebViewPool.shared.activeCount
+        let wv = WebViewTracker.shared.activeCount
         return "Governor: conc=\(currentRecommendedConcurrency) stability=\(String(format: "%.2f", currentStabilityScore)) mem=\(mem)MB wv=\(wv) adjustments=\(store.totalAdjustments) ai=\(store.totalAIAnalyses)"
     }
 

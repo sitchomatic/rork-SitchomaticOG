@@ -741,7 +741,7 @@ class PPSRAutomationViewModel {
         batchTask?.cancel()
         batchTask = nil
         forceFinalizeBatch()
-        WebViewPool.shared.forceResetCount()
+        WebViewTracker.shared.reset()
     }
 
     private func syncActiveTestCount() {

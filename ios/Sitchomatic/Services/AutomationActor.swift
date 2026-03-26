@@ -33,7 +33,6 @@ class AutomationActor {
 
     private let logger = DebugLogger.shared
     private let visionML = VisionMLService.shared
-    private let webViewPool = WebViewPool.shared
 
     private(set) var activeTasks: Int = 0
     private(set) var completedTasks: Int = 0

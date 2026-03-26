@@ -230,7 +230,7 @@ class ConcurrentAutomationEngine {
         ScreenshotCacheService.shared.resetBatchCounter()
         let stealthOn = engine.stealthEnabled
         let netConfig = networkFactory.appWideConfig(for: proxyTarget)
-        WebViewPool.shared.preWarm(count: min(maxConcurrency, 3), stealthEnabled: stealthOn, networkConfig: netConfig, target: proxyTarget)
+
 
         let proxyOK = await performProxyPreCheck(batchId: batchId)
         if !proxyOK {

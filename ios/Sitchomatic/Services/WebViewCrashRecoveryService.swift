@@ -48,7 +48,7 @@ class WebViewCrashRecoveryService {
         sessionId: String,
         onLog: ((String, PPSRLogEntry.Level) -> Void)?
     ) async -> Bool {
-        WebViewPool.shared.reportProcessTermination()
+        WebViewTracker.shared.reportProcessTermination()
 
         guard canRecover(sessionId: sessionId) else {
             recordUnrecoverable(sessionId: sessionId)

@@ -105,8 +105,7 @@ class NetworkRepairService {
                 NetworkResilienceService.shared.invalidateSharedSessions()
                 URLCache.shared.removeAllCachedResponses()
                 URLSession.shared.reset {}
-                WebViewPool.shared.emergencyPurgeAll()
-                self.logger.log("NetworkRepair: all URL sessions invalidated, WebView pool purged", category: .network, level: .info)
+                self.logger.log("NetworkRepair: all URL sessions invalidated", category: .network, level: .info)
             }
             phasesCompleted += 1
 

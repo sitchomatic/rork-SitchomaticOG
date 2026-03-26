@@ -233,7 +233,7 @@ nonisolated struct AutomationSettings: Codable, Sendable {
     var clearCacheBetweenAttempts: Bool = false
     var clearIndexedDBBetweenAttempts: Bool = false
     var freshWebViewPerAttempt: Bool = false
-    var reuseWebViewPoolSize: Int = 24
+
     var webViewMemoryLimitMB: Int = 2048
     var webViewJSEnabled: Bool = true
     var webViewImageLoadingEnabled: Bool = true
@@ -278,7 +278,7 @@ nonisolated struct AutomationSettings: Codable, Sendable {
     // MARK: - Viewport & Window
     var viewportWidth: Int = 390
     var viewportHeight: Int = 844
-    var useWebViewPoolFingerprints: Bool = true
+    var smartFingerprintReuse: Bool = true
     var randomizeViewportSize: Bool = false
     var viewportSizeVariancePx: Int = 50
     var mobileViewportEmulation: Bool = true
