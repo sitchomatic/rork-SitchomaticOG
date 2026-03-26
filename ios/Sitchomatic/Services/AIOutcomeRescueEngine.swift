@@ -72,7 +72,6 @@ class AIOutcomeRescueEngine {
     private let calibrationCooldownSeconds: TimeInterval = 1800
     private var store: RescueStore
 
-    private let knowledgeGraph = AIKnowledgeGraphService.shared
 
     private init() {
         if let saved = UserDefaults.standard.data(forKey: persistenceKey),
@@ -382,7 +381,6 @@ class AIOutcomeRescueEngine {
             store.history.removeFirst(store.history.count - maxHistory)
         }
 
-        publishRescueToKnowledgeGraph(bundle: bundle, result: result)
     }
 
     private func calibrateThreshold() {
@@ -403,39 +401,6 @@ class AIOutcomeRescueEngine {
         logger.log("OutcomeRescue: calibrated threshold → \(String(format: "%.2f", store.rescueThreshold)) (rescue rate: \(String(format: "%.0f%%", rescueRate * 100)))", category: .evaluation, level: .info)
     }
 
-    private func publishRescueToKnowledgeGraph(bundle: RescueSignalBundle, result: RescueResult) {
-        let severity: KnowledgeSeverity = result.rescued ? .medium : .low
-
-        let payload: [String: String] = [
-            "rescued": "\(result.rescued)",
-            "originalOutcome": bundle.originalOutcome,
-            "newOutcome": result.newOutcome,
-            "originalConfidence": String(format: "%.2f", bundle.originalConfidence),
-            "newConfidence": String(format: "%.2f", result.newConfidence),
-            "signalsUsed": result.signalsUsed.joined(separator: ","),
-        ]
-
-        let summary = result.rescued
-            ? "Rescue \(bundle.originalOutcome)→\(result.newOutcome) on \(bundle.host) (\(Int(result.newConfidence * 100))%)"
-            : "Rescue failed on \(bundle.host) — \(bundle.originalOutcome) unchanged"
-
-        knowledgeGraph.publishEvent(
-            source: "AIOutcomeRescue",
-            host: bundle.host,
-            domain: .rescue,
-            type: .rescueOutcome,
-            severity: severity,
-            confidence: result.newConfidence,
-            payload: payload,
-            summary: summary
-        )
-    }
-
-    func getTransferLearningRescueInsight(for host: String) -> (rescueRate: Double, commonOutcomes: [String])? {
-        let intel = knowledgeGraph.getHostIntelligence(host: host)
-        guard intel.rescueAttempts > 0 else { return nil }
-        return (intel.rescueSuccessRate, intel.commonRescueOutcomes)
-    }
 
     private func save() {
         if let encoded = try? JSONEncoder().encode(store) {

@@ -105,7 +105,6 @@ class AIFingerprintTuningService {
     private let aiAnalysisCooldownSeconds: TimeInterval = 300
     private var store: FingerprintTuningStore
 
-    private let knowledgeGraph = AIKnowledgeGraphService.shared
 
     private init() {
         if let saved = UserDefaults.standard.data(forKey: persistenceKey),
@@ -190,7 +189,6 @@ class AIFingerprintTuningService {
 
         save()
 
-        publishFingerprintToKnowledgeGraph(profileIndex: profileIndex, host: host, detected: detected, validationScore: validationScore, signals: signals, loginSuccess: loginSuccess, challengeTriggered: challengeTriggered, stats: stats)
 
         let totalSamples = store.profileStats.values.reduce(0) { $0 + $1.useCount }
         if totalSamples >= aiAnalysisThreshold &&
@@ -389,47 +387,7 @@ class AIFingerprintTuningService {
         logger.log("AIFingerprint: AI optimization applied to \(applied)/\(json.count) profiles", category: .fingerprint, level: .success)
     }
 
-    private func publishFingerprintToKnowledgeGraph(profileIndex: Int, host: String, detected: Bool, validationScore: Int, signals: [String], loginSuccess: Bool, challengeTriggered: Bool, stats: FingerprintProfileStats) {
-        let severity: KnowledgeSeverity
-        if detected && challengeTriggered { severity = .high }
-        else if detected { severity = .medium }
-        else { severity = .low }
 
-        var payload: [String: String] = [
-            "profileIndex": "\(profileIndex)",
-            "detected": "\(detected)",
-            "validationScore": "\(validationScore)",
-            "loginSuccess": "\(loginSuccess)",
-            "challengeTriggered": "\(challengeTriggered)",
-            "detectionRate": String(format: "%.0f", stats.detectionRate * 100),
-            "successRate": String(format: "%.0f", stats.successRate * 100),
-            "preferredProfile": "\(profileIndex)",
-        ]
-        if !signals.isEmpty {
-            payload["signals"] = signals.joined(separator: ",")
-        }
-
-        let summary = detected
-            ? "Fingerprint profile \(profileIndex) detected on \(host) — signals: \(signals.prefix(3).joined(separator: ", "))"
-            : "Fingerprint profile \(profileIndex) \(loginSuccess ? "success" : "no detection") on \(host)"
-
-        knowledgeGraph.publishEvent(
-            source: "AIFingerprintTuning",
-            host: host,
-            domain: .fingerprint,
-            type: detected ? .threatSignal : .strategyOutcome,
-            severity: severity,
-            confidence: 0.80,
-            payload: payload,
-            summary: summary
-        )
-    }
-
-    func getTransferLearningFingerprintHints(for host: String) -> [Int]? {
-        let intel = knowledgeGraph.getHostIntelligence(host: host)
-        guard !intel.preferredFingerprintIndices.isEmpty else { return nil }
-        return intel.preferredFingerprintIndices
-    }
 
     private func save() {
         if let encoded = try? JSONEncoder().encode(store) {

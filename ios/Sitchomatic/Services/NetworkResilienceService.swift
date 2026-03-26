@@ -269,7 +269,6 @@ class NetworkResilienceService {
         var profile = regionLatencies[region] ?? RegionLatencyProfile(region: region)
         profile.addSample(latencyMs: latencyMs)
         regionLatencies[region] = profile
-        AIAnomalyForecastingService.shared.recordLatency(key: "region_\(region)", latencyMs: latencyMs)
     }
 
     func bestRegion() -> String? {
@@ -360,15 +359,6 @@ class NetworkResilienceService {
     }
 
     func recordLatencySample(latencyMs: Int, hadError: Bool, hostname: String? = nil) {
-        if let host = hostname {
-            AIAnomalyForecastingService.shared.recordLatency(key: host, latencyMs: latencyMs)
-            if hadError {
-                AIAnomalyForecastingService.shared.recordError(key: host)
-            } else {
-                AIAnomalyForecastingService.shared.recordSuccess(key: host)
-            }
-        }
-
         if hadError || latencyMs > throttleLatencyThresholdMs {
             if currentConcurrencyLimit > minConcurrency {
                 currentConcurrencyLimit = max(minConcurrency, currentConcurrencyLimit - 1)

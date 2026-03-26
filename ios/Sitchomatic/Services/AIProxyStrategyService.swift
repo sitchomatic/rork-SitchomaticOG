@@ -91,7 +91,6 @@ class AIProxyStrategyService {
     private let cooldownDuration: TimeInterval = 300
     private var store: ProxyStrategyStore
 
-    private let knowledgeGraph = AIKnowledgeGraphService.shared
 
     private init() {
         if let saved = UserDefaults.standard.data(forKey: persistKey),
@@ -149,7 +148,6 @@ class AIProxyStrategyService {
         store.profiles[key] = profile
         save()
 
-        publishProxyToKnowledgeGraph(proxyId: proxyId, host: host, success: success, latencyMs: latencyMs, blocked: blocked, challengeDetected: challengeDetected, profile: profile)
 
         let totalForHost = store.recentOutcomes.filter { $0.host == host }.count
         if totalForHost >= aiAnalysisThreshold && totalForHost % aiAnalysisThreshold == 0 {
@@ -357,47 +355,7 @@ class AIProxyStrategyService {
         return resolved
     }
 
-    private func publishProxyToKnowledgeGraph(proxyId: String, host: String, success: Bool, latencyMs: Int, blocked: Bool, challengeDetected: Bool, profile: ProxyHostProfile) {
-        let severity: KnowledgeSeverity
-        if blocked && profile.blockRate > 0.6 { severity = .high }
-        else if blocked { severity = .medium }
-        else if !success { severity = .medium }
-        else { severity = .low }
 
-        let payload: [String: String] = [
-            "proxyId": String(proxyId.prefix(16)),
-            "success": "\(success)",
-            "blocked": "\(blocked)",
-            "challengeDetected": "\(challengeDetected)",
-            "latencyMs": "\(latencyMs)",
-            "blockRate": String(format: "%.0f", profile.blockRate * 100),
-            "successRate": String(format: "%.0f", profile.successRate * 100),
-            "compositeScore": String(format: "%.3f", profile.compositeScore),
-        ]
-
-        let summary = blocked
-            ? "Proxy blocked on \(host) — block rate \(Int(profile.blockRate * 100))%"
-            : success
-                ? "Proxy ok on \(host) — \(latencyMs)ms"
-                : "Proxy fail on \(host) — success rate \(Int(profile.successRate * 100))%"
-
-        knowledgeGraph.publishEvent(
-            source: "AIProxyStrategy",
-            host: host,
-            domain: .proxy,
-            type: blocked ? .threatSignal : .performanceMetric,
-            severity: severity,
-            confidence: 0.82,
-            payload: payload,
-            summary: summary
-        )
-    }
-
-    func getTransferLearningProxyHints(for host: String) -> [String]? {
-        let intel = knowledgeGraph.getHostIntelligence(host: host)
-        guard !intel.bestProxyIds.isEmpty else { return nil }
-        return intel.bestProxyIds
-    }
 
     private func save() {
         if let encoded = try? JSONEncoder().encode(store) {

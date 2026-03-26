@@ -10,8 +10,6 @@ class HybridNetworkingService {
     private let proxyService = ProxyRotationService.shared
     private let aiStrategy = AIProxyStrategyService.shared
     private let intel = NordServerIntelligence.shared
-    private let predictiveRoute = AIPredictiveRouteService.shared
-    private let anomalyForecasting = AIAnomalyForecastingService.shared
     private let logger = DebugLogger.shared
 
     private var sessionIndex: Int = 0
@@ -301,23 +299,6 @@ class HybridNetworkingService {
                 intel.recordFailure(hostname: host)
             }
 
-            predictiveRoute.recordOutcome(
-                host: host,
-                method: method,
-                region: region,
-                success: success,
-                latencyMs: latencyMs,
-                wasBlocked: wasBlocked,
-                wasTimeout: wasTimeout
-            )
-
-            anomalyForecasting.recordLatency(key: host, latencyMs: latencyMs)
-            if success {
-                anomalyForecasting.recordSuccess(key: host)
-            } else {
-                anomalyForecasting.recordError(key: host, isRateLimit: wasBlocked)
-            }
-            anomalyForecasting.recordRegionOutcome(region: region, host: host, success: success)
         }
 
         if stat.isDegraded {
@@ -789,34 +770,18 @@ class HybridNetworkingService {
         }
         let effective = prefilteredByPreflight.isEmpty ? available : prefilteredByPreflight
 
-        let host = hostForTarget(target)
-        let degraded = predictiveRoute.degradedMethods(for: host)
-        let filtered = effective.filter { !degraded.contains($0) || effective.count <= 1 }
-        let afterDegraded = filtered.isEmpty ? effective : filtered
-
-        let ranked = predictiveRoute.rankedMethods(for: host, available: afterDegraded)
-
-        let finalRanked: [HybridMethod]
-        if ranked == afterDegraded {
-            finalRanked = afterDegraded.sorted { a, b in
-                let scoreA = methodHealthScores[a] ?? 0.5
-                let scoreB = methodHealthScores[b] ?? 0.5
-                if abs(scoreA - scoreB) < 0.05 {
-                    return a.priority < b.priority
-                }
-                return scoreA > scoreB
+        let finalRanked = effective.sorted { a, b in
+            let scoreA = methodHealthScores[a] ?? 0.5
+            let scoreB = methodHealthScores[b] ?? 0.5
+            if abs(scoreA - scoreB) < 0.05 {
+                return a.priority < b.priority
             }
-        } else {
-            finalRanked = ranked
+            return scoreA > scoreB
         }
 
         cachedRankedMethods = finalRanked
         cachedRankTarget = target
         if lastRerankTime == .distantPast { lastRerankTime = Date() }
-
-        if !degraded.isEmpty {
-            logger.log("Hybrid: degraded methods excluded: \(degraded.map(\.rawValue).joined(separator: ", "))", category: .network, level: .warning)
-        }
         let cbInfo = circuitBreakers.filter { $0.value.isOpen || $0.value.isHalfOpen }
         if !cbInfo.isEmpty {
             logger.log("Hybrid: circuit-broken: \(cbInfo.map { "\($0.key.rawValue):\($0.value.state.rawValue)" }.joined(separator: ", "))", category: .network, level: .warning)

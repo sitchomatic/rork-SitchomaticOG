@@ -52,8 +52,6 @@ class LoginAutomationEngine {
     private let aiInteractionGraph = AIReinforcementInteractionGraph.shared
     private let activityMonitor = SessionActivityMonitor.shared
     private let liveSpeed = LiveSpeedAdaptationService.shared
-    private let autopilot = AISessionAutopilotEngine.shared
-    private let autopilotExecutor = AutopilotActionExecutor.shared
     var onScreenshot: ((PPSRDebugScreenshot) -> Void)?
     var onPurgeScreenshots: (([String]) -> Void)?
     var onConnectionFailure: ((String) -> Void)?
@@ -98,8 +96,6 @@ class LoginAutomationEngine {
             attempt.completedAt = Date()
             return .connectionFailure
         }
-
-        autopilot.startSession(id: sessionId, host: host)
 
         replayLogger.startSession(id: sessionId, targetURL: targetURL.absoluteString, credential: attempt.credential.username)
         replayLogger.log(sessionId: sessionId, action: "init", detail: "timeout=\(Int(timeout))s stealth=\(stealthEnabled)")
@@ -467,8 +463,6 @@ class LoginAutomationEngine {
             }
         }
 
-        autopilot.endSession(id: sessionId)
-
         logger.endSession(sessionId, category: .login, message: "Login test COMPLETE: \(finalOutcomeResult) for \(attempt.credential.username) confidence=\(String(format: "%.0f%%", confidenceResult.confidence * 100))", level: finalOutcomeResult == .success ? .success : finalOutcomeResult == .noAcc ? .warning : .error)
 
         return finalOutcomeResult
@@ -489,12 +483,10 @@ class LoginAutomationEngine {
             if loaded {
                 logger.log("Page load attempt \(attemptNum)/3 SUCCESS", category: .webView, level: .success, sessionId: sessionId, durationMs: loadMs)
                 let pageHost = session.targetURL.host ?? ""
-                autopilot.ingestPageLoadEvent(sessionId: sessionId, host: pageHost, url: session.targetURL.absoluteString, httpStatus: session.lastHTTPStatusCode ?? 200, loadTimeMs: loadMs ?? 0)
                 break
             }
             let errorDetail = session.lastNavigationError ?? "unknown error"
             logger.log("Page load attempt \(attemptNum)/3 FAILED: \(errorDetail)", category: .webView, level: .warning, sessionId: sessionId, durationMs: loadMs)
-            autopilot.ingestPageLoadEvent(sessionId: sessionId, host: session.targetURL.host ?? "", url: session.targetURL.absoluteString, httpStatus: session.lastHTTPStatusCode ?? 0, loadTimeMs: loadMs ?? 0)
             attempt.logs.append(PPSRLogEntry(message: "Page load attempt \(attemptNum)/3 failed — \(errorDetail)", level: .warning))
             if attemptNum < 3 {
                 let waitTime = Double(attemptNum) * 2
@@ -538,18 +530,6 @@ class LoginAutomationEngine {
         let challengeHost = session.targetURL.host ?? session.targetURL.absoluteString
         let challengeResult = await challengeClassifier.classify(session: session)
         if challengeResult.type != .none {
-            autopilot.ingestDOMMutation(sessionId: sessionId, host: challengeHost, mutationType: "challenge_detected", elementInfo: "type=\(challengeResult.type.rawValue) signals=\(challengeResult.signals.prefix(3).joined(separator: ","))")
-            let autopilotDecision = autopilot.ingestSignal(AutopilotSignal(
-                type: challengeResult.type == .captcha ? .captchaFormingDetected : .challengeFormingDetected,
-                sessionId: sessionId, host: challengeHost, timestamp: Date(),
-                confidence: challengeResult.confidence,
-                metadata: ["challengeType": challengeResult.type.rawValue],
-                rawData: nil
-            ))
-            if autopilotDecision.action != .noOp {
-                let execResult = await autopilotExecutor.execute(decision: autopilotDecision, session: session, proxyTarget: proxyTarget)
-                attempt.logs.append(PPSRLogEntry(message: "AUTOPILOT: \(autopilotDecision.action.rawValue) — \(execResult.detail)", level: execResult.success ? .info : .warning))
-            }
             let aiRec = challengeResult.aiBypassRecommendation
             let strategyLabel = aiRec?.primaryStrategy ?? challengeResult.suggestedAction.rawValue
             attempt.logs.append(PPSRLogEntry(message: "CHALLENGE DETECTED: \(challengeResult.type.rawValue) (confidence: \(String(format: "%.0f%%", challengeResult.confidence * 100))) — AI strategy: \(strategyLabel)", level: .warning))
@@ -637,7 +617,6 @@ class LoginAutomationEngine {
         logger.log("Page title: \"\(pageTitle)\"", category: .webView, level: .debug, sessionId: sessionId)
 
         if let initialScreenshot = await session.captureScreenshot(), BlankScreenshotDetector.isBlank(initialScreenshot) {
-            autopilot.ingestBlankPageDetected(sessionId: sessionId, host: pageHost)
             attempt.logs.append(PPSRLogEntry(message: "BLANK PAGE after load — waiting up to \(automationSettings.blankPageTimeoutSeconds)s for content...", level: .warning))
             logger.log("BLANK PAGE detected after load for \(attempt.credential.username) — polling for \(automationSettings.blankPageTimeoutSeconds)s", category: .screenshot, level: .warning, sessionId: sessionId)
 

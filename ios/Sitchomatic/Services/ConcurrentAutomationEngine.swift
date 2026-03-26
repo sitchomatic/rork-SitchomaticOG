@@ -11,7 +11,6 @@ class ConcurrentAutomationEngine {
     private let urlCooldown = URLCooldownService.shared
     private let throttler = AutomationThrottler(maxConcurrency: 5)
     private let circuitBreaker = HostCircuitBreakerService.shared
-    private let anomalyForecasting = AIAnomalyForecastingService.shared
     private let urlQualityScoring = URLQualityScoringService.shared
     private let aiCredentialPriority = AICredentialPriorityScoringService.shared
     private let proxyQualityDecay = ProxyQualityDecayService.shared
@@ -22,8 +21,6 @@ class ConcurrentAutomationEngine {
     private let webViewMemoryManager = AIWebViewMemoryLifecycleManager.shared
     private let batchPreOptimizer = AIPredictiveBatchPreOptimizer.shared
     private let credentialTriage = AICredentialTriageService.shared
-    private let adversarialSim = AIAdversarialSimulationEngine.shared
-    private let swarmIntelligence = AISwarmIntelligenceService.shared
 
     private(set) var isRunning: Bool = false
     private var cancelFlag: Bool = false
@@ -243,11 +240,6 @@ class ConcurrentAutomationEngine {
 
         let healthyURLs = await runPreflight(urls: urls, netConfig: netConfig, proxyTarget: proxyTarget, stealthEnabled: stealthOn)
 
-        await runPreBatchAdversarialSim(host: healthyURLs.first?.host ?? urls.first?.host ?? "unknown", batchId: batchId)
-
-        let swarmHost = healthyURLs.first?.host ?? urls.first?.host ?? "unknown"
-        let swarmProfile = swarmIntelligence.registerSession(sessionId: batchId, host: swarmHost)
-        _ = swarmProfile
 
         var allResults: [(String, LoginOutcome)] = []
         var carryOverIndices: [Int] = []
@@ -295,12 +287,6 @@ class ConcurrentAutomationEngine {
                 }
                 state.consecutiveConnectionFailures = 0
                 concurrencyGovernor.feedOutcome(success: success)
-                swarmIntelligence.recordSessionOutcome(sessionId: batchId, success: success, latencyMs: latency)
-                if success {
-                    swarmIntelligence.broadcastSignal(sessionId: batchId, host: swarmHost, type: .successPattern, payload: ["username": username, "latencyMs": "\(latency)"], confidence: 0.8)
-                } else if outcome == .redBannerError || outcome == .smsDetected {
-                    swarmIntelligence.broadcastSignal(sessionId: batchId, host: swarmHost, type: .rateLimitHit, priority: .high, payload: ["outcome": "\(outcome)"], confidence: 0.9)
-                }
                 onProgress(state.processed, attempts.count, outcome)
             }
 
@@ -346,10 +332,8 @@ class ConcurrentAutomationEngine {
             if didPause && cancelFlag { break }
 
             trackRateLimitSignals(batchResults: batchResults, state: &state)
-            recordAnomalyMetrics(batchResults: batchResults, proxyTarget: proxyTarget, state: state)
-            swarmIntelligence.runCoordinationCycle(host: swarmHost)
+            recordLiveSpeedMetrics(batchResults: batchResults)
             await applyLiveSpeedAdaptation(batchResults: batchResults)
-            await applyAnomalyForecastActions(healthyURLs: healthyURLs, proxyTarget: proxyTarget, maxConcurrency: maxConcurrency)
 
             if batchEnd < attempts.count && !cancelFlag {
                 let cooldown = computeLoginCooldown(batchResults: batchResults, proxyTarget: proxyTarget, state: state)
@@ -382,7 +366,6 @@ class ConcurrentAutomationEngine {
             )
         }
 
-        swarmIntelligence.unregisterSession(sessionId: batchId)
         logger.endSession(batchId, category: .login, message: "ConcurrentEngine: login batch complete — \(state.successCount) success, \(state.failureCount) fail, avgLatency=\(avgLatency)ms | network=\(networkSummary)")
 
         isRunning = false
@@ -505,22 +488,16 @@ class ConcurrentAutomationEngine {
             logger.log("ConcurrentEngine: throttling for \(String(format: "%.1f", throttleCheck.waitSeconds))s", category: .automation, level: .warning)
             try? await Task.sleep(for: .seconds(throttleCheck.waitSeconds))
         }
-        let anomalyThrottle = anomalyForecasting.shouldThrottleRequests(key: key)
-        if anomalyThrottle.shouldThrottle {
-            logger.log("ConcurrentEngine: anomaly forecasting throttle \(anomalyThrottle.delayMs)ms", category: .automation, level: .warning)
-            try? await Task.sleep(for: .milliseconds(anomalyThrottle.delayMs))
-        }
     }
 
     private func applyAdaptiveConcurrency(batchResults: [(String, CheckOutcome, Int)], processed: Int, maxConcurrency: Int, key: String) async {
         guard coordinator.adaptiveConcurrency && processed > 3 else { return }
         let recentOutcomes = batchResults.map { (cardId: $0.0, outcome: $0.1, latencyMs: $0.2) }
         let analytics = coordinator.computeBatchAnalytics(outcomes: recentOutcomes)
-        let anomalyConcurrency = anomalyForecasting.recommendedConcurrency(key: key, currentMax: analytics.suggestedConcurrency)
-        let finalConcurrency = min(analytics.suggestedConcurrency, anomalyConcurrency)
+        let finalConcurrency = analytics.suggestedConcurrency
         if finalConcurrency != maxConcurrency {
             await throttler.updateMaxConcurrency(finalConcurrency)
-            logger.log("ConcurrentEngine: adaptive concurrency → \(finalConcurrency) (anomaly: \(anomalyConcurrency))", category: .automation, level: .info)
+            logger.log("ConcurrentEngine: adaptive concurrency → \(finalConcurrency)", category: .automation, level: .info)
         }
     }
 
@@ -744,15 +721,8 @@ class ConcurrentAutomationEngine {
         }
     }
 
-    private func recordAnomalyMetrics(batchResults: [(String, LoginOutcome, Int, Int)], proxyTarget: ProxyRotationService.ProxyTarget, state: BatchState) {
-        let forecastKey = "login_\(proxyTarget.rawValue)"
+    private func recordLiveSpeedMetrics(batchResults: [(String, LoginOutcome, Int, Int)]) {
         for (_, outcome, latency, _) in batchResults {
-            anomalyForecasting.recordLatency(key: forecastKey, latencyMs: latency)
-            if outcome == .success {
-                anomalyForecasting.recordSuccess(key: forecastKey)
-            } else {
-                anomalyForecasting.recordError(key: forecastKey, isRateLimit: outcome == .redBannerError || outcome == .smsDetected)
-            }
             let isSuccess = outcome == .success || outcome == .noAcc || outcome == .permDisabled || outcome == .tempDisabled
             liveSpeed.recordLatency(
                 latencyMs: latency, success: isSuccess,
@@ -773,28 +743,11 @@ class ConcurrentAutomationEngine {
         }
     }
 
-    private func applyAnomalyForecastActions(healthyURLs: [URL], proxyTarget: ProxyRotationService.ProxyTarget, maxConcurrency: Int) async {
-        let forecast = anomalyForecasting.forecast(key: "login_\(proxyTarget.rawValue)")
-        if forecast.softBreakRecommended {
-            for url in healthyURLs {
-                if let host = url.host { await circuitBreaker.applySoftBreak(host: host) }
-            }
-        }
-        if let reduction = forecast.concurrencyReduction, reduction > 0 {
-            let newMax = max(1, maxConcurrency - reduction)
-            await throttler.updateMaxConcurrency(newMax)
-            logger.log("ConcurrentEngine: anomaly forecast reducing concurrency to \(newMax)", category: .automation, level: .warning)
-        }
-    }
-
     private func computeLoginCooldown(batchResults: [(String, LoginOutcome, Int, Int)], proxyTarget: ProxyRotationService.ProxyTarget, state: BatchState) -> Int {
-        let anomalyThrottle = anomalyForecasting.shouldThrottleRequests(key: "login_\(proxyTarget.rawValue)")
         let batchSuccessRate = batchResults.isEmpty ? 0.5 : Double(batchResults.filter { $0.1 == .success }.count) / Double(batchResults.count)
         let rateLimitMultiplier = state.rateLimitSignalCount > 3 ? 2.5 : (state.rateLimitSignalCount > 0 ? 1.5 : 1.0)
         let baseCooldown: Int
-        if anomalyThrottle.shouldThrottle {
-            baseCooldown = anomalyThrottle.delayMs
-        } else if batchSuccessRate > 0.8 {
+        if batchSuccessRate > 0.8 {
             baseCooldown = Int(Double(Int.random(in: 250...600)) * rateLimitMultiplier)
         } else if batchSuccessRate < 0.3 {
             baseCooldown = Int(Double(Int.random(in: 1500...3000)) * rateLimitMultiplier)
@@ -992,21 +945,6 @@ class ConcurrentAutomationEngine {
         return false
     }
 
-    private func runPreBatchAdversarialSim(host: String, batchId: String) async {
-        guard adversarialSim.shouldRunSimulation(host: host, cooldownMinutes: 15) else {
-            logger.log("ConcurrentEngine: adversarial sim skipped for \(host) — cooldown active", category: .automation, level: .debug)
-            return
-        }
-        logger.log("ConcurrentEngine: running pre-batch adversarial simulation for \(host)", category: .automation, level: .info)
-        let suite = await adversarialSim.runSimulation(host: host, difficulty: .intermediate, scenarioTypes: [.timingDetection, .fingerprintDetection, .proxyBlocking, .rateLimiting])
-        if suite.overallVerdict == .critical {
-            logger.log("ConcurrentEngine: adversarial sim CRITICAL for \(host) — score \(String(format: "%.0f%%", suite.overallScore * 100)). Auto-healing actions queued.", category: .automation, level: .critical)
-        } else if suite.overallVerdict == .failed {
-            logger.log("ConcurrentEngine: adversarial sim FAILED for \(host) — score \(String(format: "%.0f%%", suite.overallScore * 100))", category: .automation, level: .warning)
-        } else {
-            logger.log("ConcurrentEngine: adversarial sim \(suite.overallVerdict.label) for \(host) — score \(String(format: "%.0f%%", suite.overallScore * 100))", category: .automation, level: .info)
-        }
-    }
 
     private func performProxyPreCheck(batchId: String) async -> Bool {
         logger.log("ConcurrentEngine: running proxy pre-check...", category: .network, level: .info)

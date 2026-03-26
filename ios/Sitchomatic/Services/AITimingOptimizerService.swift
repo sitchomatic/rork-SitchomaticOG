@@ -81,7 +81,6 @@ class AITimingOptimizerService {
     private let aiRecalibrationThreshold = 50
     private var store: TimingStore
 
-    private let knowledgeGraph = AIKnowledgeGraphService.shared
 
     private init() {
         if let saved = UserDefaults.standard.data(forKey: persistenceKey),
@@ -152,7 +151,6 @@ class AITimingOptimizerService {
         store.profiles[host] = profile
         save()
 
-        publishTimingToKnowledgeGraph(host: host, category: category, actualMs: actualMs, fillSuccess: fillSuccess, submitSuccess: submitSuccess, detected: detected, profile: profile)
 
         let newAttemptsSinceAI = profile.totalSamples - Int(profile.lastAIRecalibration.timeIntervalSince1970 == Date.distantPast.timeIntervalSince1970 ? 0 : Double(profile.totalSamples) * 0.8)
         if profile.totalSamples >= aiRecalibrationThreshold &&
@@ -357,46 +355,6 @@ class AITimingOptimizerService {
         logger.log("AITiming: AI recalibration applied \(applied)/\(TimingCategory.allCases.count) categories for \(host)", category: .timing, level: .success)
     }
 
-    private func publishTimingToKnowledgeGraph(host: String, category: TimingCategory, actualMs: Int, fillSuccess: Bool, submitSuccess: Bool, detected: Bool, profile: TimingProfile) {
-        let severity: KnowledgeSeverity = detected ? .high : (fillSuccess && submitSuccess ? .low : .medium)
-
-        let payload: [String: String] = [
-            "category": category.rawValue,
-            "actualMs": "\(actualMs)",
-            "fillSuccess": "\(fillSuccess)",
-            "submitSuccess": "\(submitSuccess)",
-            "detected": "\(detected)",
-            "fillRate": String(format: "%.0f", profile.fillRate * 100),
-            "detectionRate": String(format: "%.0f", profile.detectionRate * 100),
-            "keystrokeMs": "\(profile.keystroke.minMs)-\(profile.keystroke.maxMs)",
-            "interFieldMs": "\(profile.interField.minMs)-\(profile.interField.maxMs)",
-            "preSubmitMs": "\(profile.preSubmit.minMs)-\(profile.preSubmit.maxMs)",
-        ]
-
-        let summary = detected
-            ? "Timing detected on \(host) \(category.rawValue) at \(actualMs)ms"
-            : "Timing \(fillSuccess ? "ok" : "fail") on \(host) \(category.rawValue) \(actualMs)ms"
-
-        knowledgeGraph.publishEvent(
-            source: "AITimingOptimizer",
-            host: host,
-            domain: .timing,
-            type: detected ? .threatSignal : .performanceMetric,
-            severity: severity,
-            confidence: 0.80,
-            payload: payload,
-            summary: summary
-        )
-    }
-
-    func getTransferLearningTimingHints(for host: String) -> TimingBounds? {
-        let intel = knowledgeGraph.getHostIntelligence(host: host)
-        guard intel.eventCount >= 5, intel.timingProfile.fillRate > 0 else { return nil }
-        return TimingBounds(
-            minMs: intel.timingProfile.optimalKeystrokeMs - 20,
-            maxMs: intel.timingProfile.optimalKeystrokeMs + 40
-        )
-    }
 
     private func save() {
         if let encoded = try? JSONEncoder().encode(store) {

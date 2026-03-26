@@ -135,7 +135,6 @@ class AISessionHealthMonitorService {
         }
     }
 
-    private let knowledgeGraph = AIKnowledgeGraphService.shared
 
     func recordSnapshot(_ snapshot: SessionHealthSnapshot) {
         store.recentSnapshots.append(snapshot)
@@ -178,7 +177,6 @@ class AISessionHealthMonitorService {
         store.hostProfiles[host] = profile
         save()
 
-        publishHealthToKnowledgeGraph(snapshot: snapshot, profile: profile, isSuccess: isSuccess)
 
         let totalSessions = store.hostProfiles.values.reduce(0) { $0 + $1.totalSessions }
         if totalSessions >= aiAnalysisThreshold &&
@@ -410,61 +408,6 @@ class AISessionHealthMonitorService {
         logger.log("AISessionHealth: AI analysis applied to \(applied)/\(json.count) hosts", category: .automation, level: .success)
     }
 
-    private func publishHealthToKnowledgeGraph(snapshot: SessionHealthSnapshot, profile: HostHealthProfile, isSuccess: Bool) {
-        let severity: KnowledgeSeverity
-        if profile.consecutiveFailures >= 8 { severity = .critical }
-        else if profile.consecutiveFailures >= 5 { severity = .high }
-        else if profile.consecutiveFailures >= 3 { severity = .medium }
-        else { severity = .low }
-
-        var payload: [String: String] = [
-            "outcome": snapshot.outcome,
-            "pageLoadMs": "\(snapshot.pageLoadTimeMs)",
-            "consecutiveFailures": "\(profile.consecutiveFailures)",
-            "failureRate": "\(Int(profile.failureRate * 100))",
-            "healthScore": String(format: "%.3f", profile.healthScore),
-        ]
-        if snapshot.wasTimeout { payload["wasTimeout"] = "true" }
-        if snapshot.wasBlankPage { payload["wasBlankPage"] = "true" }
-        if snapshot.wasCrash { payload["wasCrash"] = "true" }
-        if snapshot.wasChallenge { payload["wasChallenge"] = "true" }
-        if snapshot.wasConnectionFailure { payload["wasConnectionFailure"] = "true" }
-        if snapshot.fingerprintDetected { payload["fingerprintDetected"] = "true" }
-
-        let summary: String
-        if isSuccess {
-            summary = "Session \(snapshot.outcome) on \(snapshot.host) — health \(String(format: "%.0f%%", profile.healthScore * 100))"
-        } else {
-            summary = "Session \(snapshot.outcome) on \(snapshot.host) — streak \(profile.consecutiveFailures), health \(String(format: "%.0f%%", profile.healthScore * 100))"
-        }
-
-        knowledgeGraph.publishEvent(
-            source: "AISessionHealthMonitor",
-            host: snapshot.host,
-            domain: .health,
-            type: isSuccess ? .performanceMetric : .threatSignal,
-            severity: severity,
-            confidence: 0.85,
-            payload: payload,
-            summary: summary
-        )
-    }
-
-    func getTransferLearningInsight(for host: String) -> (suggestedAction: String, reason: String)? {
-        let intel = knowledgeGraph.getHostIntelligence(host: host)
-        guard intel.eventCount >= 5 else { return nil }
-
-        if intel.detectionThreatLevel >= 0.7 {
-            return ("reduceConcurrency", "Knowledge Graph: high detection threat (\(Int(intel.detectionThreatLevel * 100))%) — reduce exposure")
-        }
-        if intel.proxyBlockRate >= 0.5 {
-            return ("rotateProxy", "Knowledge Graph: proxy block rate \(Int(intel.proxyBlockRate * 100))% — rotate proxies")
-        }
-        if intel.anomalyRiskLevel >= 0.6 {
-            return ("pause", "Knowledge Graph: anomaly risk \(Int(intel.anomalyRiskLevel * 100))% — consider pausing")
-        }
-        return nil
-    }
 
     private func save() {
         if let encoded = try? JSONEncoder().encode(store) {
