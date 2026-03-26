@@ -100,7 +100,7 @@ class WireProxyTunnelConnection {
     private func sendSOCKS5Success() {
         let response = Data([0x05, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
         clientConnection.send(content: response, completion: .contentProcessed { [weak self] error in
-            Task { [weak self] in
+            self?.queue.async { [weak self] in
                 guard let self, !self.isCancelled else { return }
                 if error != nil {
                     self.finish(error: true)
@@ -115,7 +115,7 @@ class WireProxyTunnelConnection {
     private func sendSOCKS5Error(_ rep: UInt8) {
         let response = Data([0x05, rep, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
         clientConnection.send(content: response, completion: .contentProcessed { [weak self] _ in
-            Task { [weak self] in
+            self?.queue.async { [weak self] in
                 self?.finish(error: true)
             }
         })
@@ -125,7 +125,7 @@ class WireProxyTunnelConnection {
         guard !isCancelled else { return }
 
         clientConnection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, isComplete, error in
-            Task { [weak self] in
+            self?.queue.async { [weak self] in
                 guard let self, !self.isCancelled else { return }
 
                 if let data, !data.isEmpty {
@@ -152,7 +152,7 @@ class WireProxyTunnelConnection {
         guard !isCancelled else { return }
 
         clientConnection.send(content: data, completion: .contentProcessed { [weak self] error in
-            Task { [weak self] in
+            self?.queue.async { [weak self] in
                 guard let self, !self.isCancelled else { return }
                 if error != nil {
                     self.hadError = true
@@ -187,11 +187,9 @@ class WireProxyTunnelConnection {
 
     private func startTimeout() {
         let work = DispatchWorkItem { [weak self] in
-            Task { [weak self] in
-                guard let self, !self.isCancelled else { return }
-                DebugLogger.logBackground("WireProxyTunnel: timeout for \(self.targetHost):\(self.targetPort)", category: .vpn, level: .warning)
-                self.finish(error: true)
-            }
+            guard let self, !self.isCancelled else { return }
+            DebugLogger.logBackground("WireProxyTunnel: timeout for \(self.targetHost):\(self.targetPort)", category: .vpn, level: .warning)
+            self.finish(error: true)
         }
         timeoutWork = work
         queue.asyncAfter(deadline: .now() + timeoutSeconds, execute: work)

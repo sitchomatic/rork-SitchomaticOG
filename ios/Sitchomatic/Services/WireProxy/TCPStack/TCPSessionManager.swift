@@ -69,6 +69,7 @@ class TCPSession {
 class TCPSessionManager {
     private var sessions: [TCPSessionKey: TCPSession] = [:]
     private var cleanupTask: Task<Void, Never>?
+    private let queue = DispatchQueue(label: "tcp-session-manager", qos: .userInitiated)
     var sendPacketHandler: ((Data) -> Void)?
 
     private var localIP: UInt32 = 0
@@ -396,8 +397,7 @@ class TCPSessionManager {
 
     private func scheduleTimeWaitCleanup(_ session: TCPSession) {
         let key = session.key
-        Task { [weak self] in
-            try? await Task.sleep(for: .seconds(2))
+        queue.asyncAfter(deadline: .now() + 2) { [weak self] in
             self?.sessions.removeValue(forKey: key)
         }
     }
@@ -417,7 +417,9 @@ class TCPSessionManager {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(30))
                 guard !Task.isCancelled else { break }
-                self?.cleanupStaleSessions()
+                self?.queue.async { [weak self] in
+                    self?.cleanupStaleSessions()
+                }
             }
         }
     }

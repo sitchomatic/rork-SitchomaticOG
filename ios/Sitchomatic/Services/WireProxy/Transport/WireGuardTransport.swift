@@ -90,8 +90,8 @@ class WireGuardSession {
 
     private var handshakeState: HandshakeState?
     private var udpConnection: NWConnection?
-    private var keepaliveTimer: Timer?
-    private var rekeyTimer: Timer?
+    private var keepaliveTask: Task<Void, Never>?
+    private var rekeyTask: Task<Void, Never>?
     private let queue = DispatchQueue(label: "wg-session", qos: .userInitiated)
 
     var onPacketReceived: ((Data) -> Void)?
@@ -188,7 +188,7 @@ class WireGuardSession {
         udpConnection = conn
 
         conn.stateUpdateHandler = { [weak self] state in
-            Task { [weak self] in
+            self?.queue.async { [weak self] in
                 guard let self else { return }
                 switch state {
                 case .ready:
@@ -206,10 +206,10 @@ class WireGuardSession {
     }
 
     func disconnect() {
-        keepaliveTimer?.invalidate()
-        keepaliveTimer = nil
-        rekeyTimer?.invalidate()
-        rekeyTimer = nil
+        keepaliveTask?.cancel()
+        keepaliveTask = nil
+        rekeyTask?.cancel()
+        rekeyTask = nil
         udpConnection?.cancel()
         udpConnection = nil
         sessionKeys = nil
@@ -242,7 +242,7 @@ class WireGuardSession {
         )
 
         udpConnection?.send(content: packet.serialize(), completion: .contentProcessed { [weak self] error in
-            Task { [weak self] in
+            self?.queue.async { [weak self] in
                 guard let self else { return }
                 if let error {
                     DebugLogger.logBackground("WGSession: send failed - \(error)", category: .vpn, level: .error)
@@ -271,7 +271,7 @@ class WireGuardSession {
         let initiationData = NoiseHandshake.serializeInitiation(result.initiation)
 
         udpConnection?.send(content: initiationData, completion: .contentProcessed { [weak self] error in
-            Task { [weak self] in
+            self?.queue.async { [weak self] in
                 guard let self else { return }
                 if let error {
                     self.status = .failed
@@ -286,7 +286,7 @@ class WireGuardSession {
 
     private func receiveHandshakeResponse() {
         udpConnection?.receive(minimumIncompleteLength: 1, maximumLength: 256) { [weak self] data, _, _, error in
-            Task { [weak self] in
+            self?.queue.async { [weak self] in
                 guard let self else { return }
 
                 if let error {
@@ -341,7 +341,7 @@ class WireGuardSession {
         guard status == .established else { return }
 
         udpConnection?.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, _, error in
-            Task { [weak self] in
+            self?.queue.async { [weak self] in
                 guard let self, self.status == .established else { return }
 
                 if let data, !data.isEmpty {
@@ -391,20 +391,27 @@ class WireGuardSession {
     }
 
     private func startKeepalive() {
-        keepaliveTimer?.invalidate()
+        keepaliveTask?.cancel()
         guard persistentKeepalive > 0 else { return }
+        let interval = persistentKeepalive
 
-        keepaliveTimer = Timer.scheduledTimer(withTimeInterval: TimeInterval(persistentKeepalive), repeats: true) { [weak self] _ in
-            Task { [weak self] in
-                self?.sendKeepalive()
+        keepaliveTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(interval))
+                guard !Task.isCancelled else { break }
+                self?.queue.async { [weak self] in
+                    self?.sendKeepalive()
+                }
             }
         }
     }
 
     private func startRekeyTimer() {
-        rekeyTimer?.invalidate()
-        rekeyTimer = Timer.scheduledTimer(withTimeInterval: 120, repeats: false) { [weak self] _ in
-            Task { [weak self] in
+        rekeyTask?.cancel()
+        rekeyTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(120))
+            guard !Task.isCancelled else { return }
+            self?.queue.async { [weak self] in
                 guard let self, self.status == .established else { return }
                 DebugLogger.logBackground("WGSession: rekey timer fired, initiating new handshake", category: .vpn, level: .info)
                 self.status = .rekeying

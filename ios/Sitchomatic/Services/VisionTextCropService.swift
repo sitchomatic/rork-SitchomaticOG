@@ -83,7 +83,10 @@ class VisionTextCropService {
         do {
             try handler.perform([request])
         } catch {
-            DebugLogger.logBackground("VisionTextCrop: OCR failed: \(error.localizedDescription)", category: .screenshot, level: .error)
+            let nsError = error as NSError
+            let detailedMessage = "VisionTextCrop: OCR failed: \(nsError.localizedDescription) " +
+                "(domain: \(nsError.domain), code: \(nsError.code), userInfo: \(nsError.userInfo))"
+            DebugLogger.logBackground(detailedMessage, category: .screenshot, level: .error)
             return AnalysisResult(allText: "", crucialMatches: [], detectedOutcome: .unknown, confidence: 0, textBlocks: [], processingTimeMs: 0)
         }
 

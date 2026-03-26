@@ -90,7 +90,14 @@ class VisionMLService {
         do {
             try handler.perform([request])
         } catch {
-            DebugLogger.logBackground("VisionML: OCR perform failed: \(error.localizedDescription)", category: .automation, level: .error)
+            let nsError = error as NSError
+            let underlyingError = nsError.userInfo[NSUnderlyingErrorKey] as? NSError
+            let underlyingDescription = underlyingError.map { " | underlying=\($0.domain) (\($0.code)): \($0.localizedDescription)" } ?? ""
+            DebugLogger.logBackground(
+                "VisionML: OCR perform failed: \(nsError.localizedDescription) [domain=\(nsError.domain), code=\(nsError.code)]\(underlyingDescription)",
+                category: .automation,
+                level: .error
+            )
             return []
         }
 
@@ -398,7 +405,8 @@ class VisionMLService {
         do {
             try handler.perform([request])
         } catch {
-            DebugLogger.logBackground("VisionML: rectangle detection failed: \(error.localizedDescription)", category: .automation, level: .error)
+            let nsError = error as NSError
+            DebugLogger.logBackground("VisionML: rectangle detection failed: \(nsError.localizedDescription) [domain=\(nsError.domain), code=\(nsError.code)]", category: .automation, level: .error)
             return []
         }
 
@@ -427,7 +435,8 @@ class VisionMLService {
         do {
             try handler.perform([request])
         } catch {
-            DebugLogger.logBackground("VisionML: instance mask failed: \(error.localizedDescription)", category: .automation, level: .error)
+            let nsError = error as NSError
+            DebugLogger.logBackground("VisionML: instance mask failed: \(nsError.localizedDescription) [domain=\(nsError.domain), code=\(nsError.code)]", category: .automation, level: .error)
             return []
         }
 
@@ -490,7 +499,8 @@ class VisionMLService {
         do {
             try handler.perform([attentionRequest, objectnessRequest])
         } catch {
-            DebugLogger.logBackground("VisionML: saliency detection failed: \(error.localizedDescription)", category: .automation, level: .error)
+            let nsError = error as NSError
+            DebugLogger.logBackground("VisionML: saliency detection failed: \(nsError.localizedDescription) [domain=\(nsError.domain), code=\(nsError.code)]", category: .automation, level: .error)
             return SaliencyResult(hotspots: [], primaryFocus: nil, processingTimeMs: 0)
         }
 

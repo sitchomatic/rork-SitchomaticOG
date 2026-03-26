@@ -62,6 +62,7 @@ class WireProxyBridge {
     private let healthCheckInterval: TimeInterval = 12
     private var pendingReconnectHosts: [(host: String, port: UInt16)] = []
     private var isReconnecting: Bool = false
+    private let queue = DispatchQueue(label: "wire-proxy-bridge", qos: .userInitiated)
 
     private(set) var tunnelSlots: [WireProxyTunnelSlot] = []
     private var nextSlotIndex: Int = 0
@@ -333,7 +334,9 @@ class WireProxyBridge {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(self?.healthCheckInterval ?? 12))
                 guard !Task.isCancelled else { break }
-                self?.checkTunnelHealth()
+                self?.queue.async { [weak self] in
+                    self?.checkTunnelHealth()
+                }
             }
         }
     }
