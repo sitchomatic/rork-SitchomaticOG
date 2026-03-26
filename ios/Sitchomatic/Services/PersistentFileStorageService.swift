@@ -195,7 +195,9 @@ class PersistentFileStorageService {
                 if saveErrors.isEmpty {
                     DebugLogger.shared.log("PersistentStorage: full state save complete (background)", category: .persistence, level: .success)
                 } else {
-                    DebugLogger.shared.log("PersistentStorage: save completed with \(saveErrors.count) error(s): \(saveErrors.joined(separator: "; "))", category: .persistence, level: .error)
+                    let errorSummary = saveErrors.prefix(3).joined(separator: "; ")
+                    let suffix = saveErrors.count > 3 ? " (+\(saveErrors.count - 3) more)" : ""
+                    DebugLogger.shared.log("PersistentStorage: save completed with \(saveErrors.count) error(s): \(errorSummary)\(suffix)", category: .persistence, level: .error)
                 }
             }
         }

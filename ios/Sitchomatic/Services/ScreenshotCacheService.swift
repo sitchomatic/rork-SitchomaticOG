@@ -17,7 +17,7 @@ class ScreenshotCacheService {
 
     init() {
         guard let cachesDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else {
-            fatalError("ScreenshotCacheService: caches directory unavailable")
+            fatalError("ScreenshotCacheService: Failed to locate system caches directory - this indicates a critical system configuration issue")
         }
         cacheDirectory = cachesDir.appendingPathComponent("ScreenshotCache", isDirectory: true)
         try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
