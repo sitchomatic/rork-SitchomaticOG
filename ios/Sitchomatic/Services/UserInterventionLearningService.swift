@@ -25,13 +25,11 @@ nonisolated struct InterventionLearningStore: Codable, Sendable {
     var totalAutoHeals: Int = 0
 }
 
-@MainActor
 class UserInterventionLearningService {
     static let shared = UserInterventionLearningService()
 
     private let persistenceKey = "UserInterventionLearning_v1"
     private let maxRecords = 500
-    private let logger = DebugLogger.shared
     private var store: InterventionLearningStore
 
     private init() {
@@ -82,7 +80,7 @@ class UserInterventionLearningService {
         )
 
         persist()
-        logger.log("InterventionLearning: Recorded correction \(originalClassification) → \(userCorrectedOutcome) for \(host) (total: \(store.totalCorrections))", category: .evaluation, level: .info)
+        DebugLogger.logBackground("InterventionLearning: Recorded correction \(originalClassification) → \(userCorrectedOutcome) for \(host) (total: \(store.totalCorrections))", category: .evaluation, level: .info)
     }
 
     func suggestAutoHeal(host: String, pageContent: String, currentURL: String) -> (outcome: String, confidence: Double)? {
@@ -107,7 +105,7 @@ class UserInterventionLearningService {
                 let confidence = min(0.95, 0.5 + (keywordMatch * 0.3) + (min(Double(pattern.correctionCount), 20.0) / 40.0))
                 store.totalAutoHeals += 1
                 persist()
-                logger.log("InterventionLearning: Auto-heal suggestion for \(host) → \(outcome) (confidence: \(String(format: "%.0f%%", confidence * 100)), based on \(pattern.correctionCount) corrections)", category: .evaluation, level: .info)
+                DebugLogger.logBackground("InterventionLearning: Auto-heal suggestion for \(host) → \(outcome) (confidence: \(String(format: "%.0f%%", confidence * 100)), based on \(pattern.correctionCount) corrections)", category: .evaluation, level: .info)
                 return (outcome, confidence)
             }
         }

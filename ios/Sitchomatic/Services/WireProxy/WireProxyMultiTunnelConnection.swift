@@ -1,7 +1,6 @@
 import Foundation
 import Network
 
-@MainActor
 class WireProxyMultiTunnelConnection: WireProxyTunnelConnection {
     private let slot: WireProxyTunnelSlot
     private var mtTcpSession: TCPSession?
@@ -17,7 +16,6 @@ class WireProxyMultiTunnelConnection: WireProxyTunnelConnection {
     private let mtQueue: DispatchQueue
     private weak var mtServer: LocalProxyServer?
     private weak var mtBridge: WireProxyBridge?
-    private let mtLogger = DebugLogger.shared
     private let mtId: UUID
 
     init(
@@ -72,7 +70,7 @@ class WireProxyMultiTunnelConnection: WireProxyTunnelConnection {
         guard !mtIsCancelled, let bridge = mtBridge else { finishMT(error: true); return }
 
         guard let destinationIP = await bridge.resolveMultiTunnelHostname(mtTargetHost, slot: slot) else {
-            mtLogger.log("WireProxyMT: DNS resolve failed for \(mtTargetHost) on slot \(slot.index)", category: .vpn, level: .error)
+            DebugLogger.logBackground("WireProxyMT: DNS resolve failed for \(mtTargetHost) on slot \(slot.index)", category: .vpn, level: .error)
             sendMTSOCKS5Error(0x04)
             return
         }
@@ -102,18 +100,18 @@ class WireProxyMultiTunnelConnection: WireProxyTunnelConnection {
 
         session.onError = { [weak self] error in
             guard let self, !self.mtIsCancelled else { return }
-            self.mtLogger.log("WireProxyMT: TCP error for \(self.mtTargetHost):\(self.mtTargetPort) slot \(self.slot.index) - \(error)", category: .vpn, level: .error)
+            DebugLogger.logBackground("WireProxyMT: TCP error for \(self.mtTargetHost):\(self.mtTargetPort) slot \(self.slot.index) - \(error)", category: .vpn, level: .error)
             self.finishMT(error: true)
         }
 
         bridge.initiateMultiTunnelConnection(session, slot: slot)
-        mtLogger.log("WireProxyMT: connecting \(mtTargetHost):\(mtTargetPort) via slot \(slot.index) (\(slot.serverName))", category: .vpn, level: .debug)
+        DebugLogger.logBackground("WireProxyMT: connecting \(mtTargetHost):\(mtTargetPort) via slot \(slot.index) (\(slot.serverName))", category: .vpn, level: .debug)
     }
 
     private func sendMTSOCKS5Success() {
         let response = Data([0x05, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
         mtClientConnection.send(content: response, completion: .contentProcessed { [weak self] error in
-            Task { @MainActor [weak self] in
+            self?.mtQueue.async { [weak self] in
                 guard let self, !self.mtIsCancelled else { return }
                 if error != nil {
                     self.finishMT(error: true)
@@ -128,7 +126,7 @@ class WireProxyMultiTunnelConnection: WireProxyTunnelConnection {
     private func sendMTSOCKS5Error(_ rep: UInt8) {
         let response = Data([0x05, rep, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
         mtClientConnection.send(content: response, completion: .contentProcessed { [weak self] _ in
-            Task { @MainActor [weak self] in
+            self?.mtQueue.async { [weak self] in
                 self?.finishMT(error: true)
             }
         })
@@ -138,7 +136,7 @@ class WireProxyMultiTunnelConnection: WireProxyTunnelConnection {
         guard !mtIsCancelled else { return }
 
         mtClientConnection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, isComplete, error in
-            Task { @MainActor [weak self] in
+            self?.mtQueue.async { [weak self] in
                 guard let self, !self.mtIsCancelled else { return }
 
                 if let data, !data.isEmpty {
@@ -165,7 +163,7 @@ class WireProxyMultiTunnelConnection: WireProxyTunnelConnection {
         guard !mtIsCancelled else { return }
 
         mtClientConnection.send(content: data, completion: .contentProcessed { [weak self] error in
-            Task { @MainActor [weak self] in
+            self?.mtQueue.async { [weak self] in
                 guard let self, !self.mtIsCancelled else { return }
                 if error != nil {
                     self.mtHadError = true
@@ -200,11 +198,9 @@ class WireProxyMultiTunnelConnection: WireProxyTunnelConnection {
 
     private func startMTTimeout() {
         let work = DispatchWorkItem { [weak self] in
-            Task { @MainActor [weak self] in
-                guard let self, !self.mtIsCancelled else { return }
-                self.mtLogger.log("WireProxyMT: timeout for \(self.mtTargetHost):\(self.mtTargetPort) slot \(self.slot.index)", category: .vpn, level: .warning)
-                self.finishMT(error: true)
-            }
+            guard let self, !self.mtIsCancelled else { return }
+            DebugLogger.logBackground("WireProxyMT: timeout for \(self.mtTargetHost):\(self.mtTargetPort) slot \(self.slot.index)", category: .vpn, level: .warning)
+            self.finishMT(error: true)
         }
         mtTimeoutWork = work
         mtQueue.asyncAfter(deadline: .now() + mtTimeoutSeconds, execute: work)

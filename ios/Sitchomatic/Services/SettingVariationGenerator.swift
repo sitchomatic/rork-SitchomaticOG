@@ -1,6 +1,5 @@
 import Foundation
 
-@MainActor
 class SettingVariationGenerator {
     static let shared = SettingVariationGenerator()
 
@@ -118,8 +117,7 @@ class SettingVariationGenerator {
             preSubmitDelayMs: newPreSubmit,
             postSubmitDelayMs: s.postSubmitDelayMs,
             clearCookiesBetweenAttempts: s.clearCookiesBetweenAttempts,
-            sessionIsolation: s.sessionIsolation,
-            webViewPoolIndex: s.webViewPoolIndex
+            sessionIsolation: s.sessionIsolation
         )
     }
 
@@ -142,8 +140,7 @@ class SettingVariationGenerator {
             preSubmitDelayMs: snapshot.preSubmitDelayMs,
             postSubmitDelayMs: snapshot.postSubmitDelayMs,
             clearCookiesBetweenAttempts: snapshot.clearCookiesBetweenAttempts,
-            sessionIsolation: overrides.pinSessionIsolation ?? snapshot.sessionIsolation,
-            webViewPoolIndex: snapshot.webViewPoolIndex
+            sessionIsolation: overrides.pinSessionIsolation ?? snapshot.sessionIsolation
         )
     }
 
@@ -170,7 +167,6 @@ class SettingVariationGenerator {
     private func generateAllVariations(count: Int, site: TestDebugSite, overrides: TestDebugVariationOverrides = TestDebugVariationOverrides()) -> [TestDebugSession] {
         var sessions: [TestDebugSession] = []
         let netModes = availableConnectionModes()
-        let poolSize = 24
 
         for i in 0..<count {
             let net = netModes[i % netModes.count]
@@ -211,8 +207,7 @@ class SettingVariationGenerator {
                 preSubmitDelayMs: preSubmit.ms,
                 postSubmitDelayMs: postSubmit.ms,
                 clearCookiesBetweenAttempts: isolation.mode != .none,
-                sessionIsolation: isolation.mode,
-                webViewPoolIndex: i % poolSize
+                sessionIsolation: isolation.mode
             )
 
             let finalSnapshot = applyOverrides(snapshot, overrides: overrides)
@@ -226,7 +221,6 @@ class SettingVariationGenerator {
     private func generateNetworkVariations(count: Int, site: TestDebugSite, overrides: TestDebugVariationOverrides = TestDebugVariationOverrides()) -> [TestDebugSession] {
         var sessions: [TestDebugSession] = []
         let netModes = availableConnectionModes()
-        let poolSize = 24
 
         let basePattern = "TRUE DETECTION"
 
@@ -253,8 +247,7 @@ class SettingVariationGenerator {
                 preSubmitDelayMs: 350,
                 postSubmitDelayMs: 600,
                 clearCookiesBetweenAttempts: true,
-                sessionIsolation: isolation.mode,
-                webViewPoolIndex: i % poolSize
+                sessionIsolation: isolation.mode
             )
 
             let finalSnapshot = applyOverrides(snapshot, overrides: overrides)
@@ -267,7 +260,6 @@ class SettingVariationGenerator {
 
     private func generateAutomationVariations(count: Int, site: TestDebugSite, overrides: TestDebugVariationOverrides = TestDebugVariationOverrides()) -> [TestDebugSession] {
         var sessions: [TestDebugSession] = []
-        let poolSize = 24
         let defaultMode = proxyService.unifiedConnectionMode
         let wgIndex: Int? = defaultMode == .wireguard ? 0 : nil
 
@@ -304,8 +296,7 @@ class SettingVariationGenerator {
                 preSubmitDelayMs: preSubmit.ms,
                 postSubmitDelayMs: postSubmit.ms,
                 clearCookiesBetweenAttempts: true,
-                sessionIsolation: .full,
-                webViewPoolIndex: i % poolSize
+                sessionIsolation: .full
             )
 
             let finalSnapshot = applyOverrides(snapshot, overrides: overrides)
@@ -318,7 +309,6 @@ class SettingVariationGenerator {
 
     private func generateSmartMatrix(count: Int, site: TestDebugSite, overrides: TestDebugVariationOverrides = TestDebugVariationOverrides()) -> [TestDebugSession] {
         var sessions: [TestDebugSession] = []
-        let poolSize = 24
         let defaultMode = proxyService.unifiedConnectionMode
         let wgIndex: Int? = defaultMode == .wireguard ? 0 : nil
         var idx = 0
@@ -340,8 +330,7 @@ class SettingVariationGenerator {
             preSubmitDelayMs: 350,
             postSubmitDelayMs: 600,
             clearCookiesBetweenAttempts: true,
-            sessionIsolation: .full,
-            webViewPoolIndex: 0
+            sessionIsolation: .full
         )
 
         func addSession(differentiator: String, snapshot: TestDebugSettingsSnapshot) {
@@ -364,8 +353,7 @@ class SettingVariationGenerator {
                 preSubmitDelayMs: s.preSubmitDelayMs,
                 postSubmitDelayMs: s.postSubmitDelayMs,
                 clearCookiesBetweenAttempts: s.clearCookiesBetweenAttempts,
-                sessionIsolation: s.sessionIsolation,
-                webViewPoolIndex: idx % poolSize
+                sessionIsolation: s.sessionIsolation
             ))
             sessions.append(session)
             idx += 1
@@ -391,8 +379,7 @@ class SettingVariationGenerator {
                 preSubmitDelayMs: baseSnapshot.preSubmitDelayMs,
                 postSubmitDelayMs: baseSnapshot.postSubmitDelayMs,
                 clearCookiesBetweenAttempts: baseSnapshot.clearCookiesBetweenAttempts,
-                sessionIsolation: baseSnapshot.sessionIsolation,
-                webViewPoolIndex: idx % poolSize
+                sessionIsolation: baseSnapshot.sessionIsolation
             )
             addSession(differentiator: "Pattern: \(pattern)", snapshot: snap)
         }
@@ -415,8 +402,7 @@ class SettingVariationGenerator {
                 preSubmitDelayMs: baseSnapshot.preSubmitDelayMs,
                 postSubmitDelayMs: baseSnapshot.postSubmitDelayMs,
                 clearCookiesBetweenAttempts: baseSnapshot.clearCookiesBetweenAttempts,
-                sessionIsolation: baseSnapshot.sessionIsolation,
-                webViewPoolIndex: idx % poolSize
+                sessionIsolation: baseSnapshot.sessionIsolation
             )
             addSession(differentiator: "Typing: \(speed.label)", snapshot: snap)
         }
@@ -439,8 +425,7 @@ class SettingVariationGenerator {
                 preSubmitDelayMs: baseSnapshot.preSubmitDelayMs,
                 postSubmitDelayMs: baseSnapshot.postSubmitDelayMs,
                 clearCookiesBetweenAttempts: baseSnapshot.clearCookiesBetweenAttempts,
-                sessionIsolation: baseSnapshot.sessionIsolation,
-                webViewPoolIndex: idx % poolSize
+                sessionIsolation: baseSnapshot.sessionIsolation
             )
             addSession(differentiator: "Stealth: \(stealth ? "ON" : "OFF")", snapshot: snap)
         }
@@ -463,8 +448,7 @@ class SettingVariationGenerator {
                 preSubmitDelayMs: baseSnapshot.preSubmitDelayMs,
                 postSubmitDelayMs: baseSnapshot.postSubmitDelayMs,
                 clearCookiesBetweenAttempts: baseSnapshot.clearCookiesBetweenAttempts,
-                sessionIsolation: baseSnapshot.sessionIsolation,
-                webViewPoolIndex: idx % poolSize
+                sessionIsolation: baseSnapshot.sessionIsolation
             )
             addSession(differentiator: "HumanSim: \(human ? "ON" : "OFF")", snapshot: snap)
         }
@@ -488,8 +472,7 @@ class SettingVariationGenerator {
                 preSubmitDelayMs: baseSnapshot.preSubmitDelayMs,
                 postSubmitDelayMs: baseSnapshot.postSubmitDelayMs,
                 clearCookiesBetweenAttempts: baseSnapshot.clearCookiesBetweenAttempts,
-                sessionIsolation: baseSnapshot.sessionIsolation,
-                webViewPoolIndex: idx % poolSize
+                sessionIsolation: baseSnapshot.sessionIsolation
             )
             addSession(differentiator: "Network: \(net.label)", snapshot: snap)
         }

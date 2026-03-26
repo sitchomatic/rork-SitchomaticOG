@@ -18,7 +18,6 @@ nonisolated struct TCPSessionKey: Hashable, Sendable {
     let destinationPort: UInt16
 }
 
-@MainActor
 class TCPSession {
     let key: TCPSessionKey
     var state: TCPSessionState = .closed
@@ -67,11 +66,10 @@ class TCPSession {
     }
 }
 
-@MainActor
 class TCPSessionManager {
     private var sessions: [TCPSessionKey: TCPSession] = [:]
-    private let logger = DebugLogger.shared
-    private var cleanupTimer: Timer?
+    private var cleanupTask: Task<Void, Never>?
+    private let queue = DispatchQueue(label: "tcp-session-manager", qos: .userInitiated)
     var sendPacketHandler: ((Data) -> Void)?
 
     private var localIP: UInt32 = 0
@@ -83,8 +81,8 @@ class TCPSessionManager {
     }
 
     func shutdown() {
-        cleanupTimer?.invalidate()
-        cleanupTimer = nil
+        cleanupTask?.cancel()
+        cleanupTask = nil
         for session in sessions.values {
             session.state = .closed
             session.onConnectionClosed?()
@@ -105,7 +103,7 @@ class TCPSessionManager {
         )
         let session = TCPSession(key: key)
         sessions[key] = session
-        logger.log("TCPSession: created \(formatKey(key))", category: .vpn, level: .debug)
+        DebugLogger.logBackground("TCPSession: created \(formatKey(key))", category: .vpn, level: .debug)
         return session
     }
 
@@ -135,7 +133,7 @@ class TCPSessionManager {
 
         session.localSeq = session.localSeq &+ 1
         sendPacketHandler?(ipPacket)
-        logger.log("TCPSession: SYN sent \(formatKey(session.key))", category: .vpn, level: .debug)
+        DebugLogger.logBackground("TCPSession: SYN sent \(formatKey(session.key))", category: .vpn, level: .debug)
     }
 
     func sendData(_ session: TCPSession, data: Data) {
@@ -201,7 +199,7 @@ class TCPSessionManager {
 
         session.localSeq = session.localSeq &+ 1
         sendPacketHandler?(ipPacket)
-        logger.log("TCPSession: FIN sent \(formatKey(session.key)) -> \(newState.rawValue)", category: .vpn, level: .debug)
+        DebugLogger.logBackground("TCPSession: FIN sent \(formatKey(session.key)) -> \(newState.rawValue)", category: .vpn, level: .debug)
     }
 
     func sendReset(_ session: TCPSession) {
@@ -251,7 +249,7 @@ class TCPSessionManager {
         session.remoteWindowSize = tcp.header.windowSize
 
         if tcp.header.flags.contains(.rst) {
-            logger.log("TCPSession: RST received \(formatKey(incomingKey))", category: .vpn, level: .warning)
+            DebugLogger.logBackground("TCPSession: RST received \(formatKey(incomingKey))", category: .vpn, level: .warning)
             session.state = .closed
             session.onError?("Connection reset by peer")
             session.onConnectionClosed?()
@@ -293,7 +291,7 @@ class TCPSessionManager {
 
         sendAck(session)
 
-        logger.log("TCPSession: ESTABLISHED \(formatKey(session.key))", category: .vpn, level: .info)
+        DebugLogger.logBackground("TCPSession: ESTABLISHED \(formatKey(session.key))", category: .vpn, level: .info)
         session.onConnectionEstablished?()
     }
 
@@ -371,7 +369,7 @@ class TCPSessionManager {
             session.state = .closed
             session.onConnectionClosed?()
             sessions.removeValue(forKey: session.key)
-            logger.log("TCPSession: CLOSED \(formatKey(session.key))", category: .vpn, level: .debug)
+            DebugLogger.logBackground("TCPSession: CLOSED \(formatKey(session.key))", category: .vpn, level: .debug)
         }
     }
 
@@ -398,10 +396,9 @@ class TCPSessionManager {
     }
 
     private func scheduleTimeWaitCleanup(_ session: TCPSession) {
-        Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.sessions.removeValue(forKey: session.key)
-            }
+        let key = session.key
+        queue.asyncAfter(deadline: .now() + 2) { [weak self] in
+            self?.sessions.removeValue(forKey: key)
         }
     }
 
@@ -415,10 +412,14 @@ class TCPSessionManager {
     }
 
     private func startCleanupTimer() {
-        cleanupTimer?.invalidate()
-        cleanupTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.cleanupStaleSessions()
+        cleanupTask?.cancel()
+        cleanupTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(30))
+                guard !Task.isCancelled else { break }
+                self?.queue.async { [weak self] in
+                    self?.cleanupStaleSessions()
+                }
             }
         }
     }
@@ -435,7 +436,7 @@ class TCPSessionManager {
             }
         }
         if !staleKeys.isEmpty {
-            logger.log("TCPSession: cleaned up \(staleKeys.count) stale sessions (\(sessions.count) remaining)", category: .vpn, level: .debug)
+            DebugLogger.logBackground("TCPSession: cleaned up \(staleKeys.count) stale sessions (\(sessions.count) remaining)", category: .vpn, level: .debug)
         }
     }
 

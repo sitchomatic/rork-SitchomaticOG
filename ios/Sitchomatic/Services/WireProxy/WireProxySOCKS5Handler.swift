@@ -1,13 +1,11 @@
 import Foundation
 import Network
 
-@MainActor
 class WireProxySOCKS5Handler {
     let id: UUID
     private let clientConnection: NWConnection
     private let queue: DispatchQueue
     private weak var server: LocalProxyServer?
-    private let logger = DebugLogger.shared
 
     private var isCancelled: Bool = false
     private var targetHost: String = ""
@@ -26,7 +24,7 @@ class WireProxySOCKS5Handler {
         startTimeout()
 
         clientConnection.stateUpdateHandler = { [weak self] state in
-            Task { @MainActor [weak self] in
+            self?.queue.async { [weak self] in
                 guard let self, !self.isCancelled else { return }
                 switch state {
                 case .ready:
@@ -54,7 +52,7 @@ class WireProxySOCKS5Handler {
         server?.updateConnectionInfo(id: id, targetHost: "", targetPort: 0, state: .handshaking)
 
         clientConnection.receive(minimumIncompleteLength: 2, maximumLength: 257) { [weak self] data, _, _, error in
-            Task { @MainActor [weak self] in
+            self?.queue.async { [weak self] in
                 guard let self, !self.isCancelled else { return }
                 if error != nil { self.finish(error: true); return }
                 guard let data, data.count >= 2, data[0] == 0x05 else {
@@ -64,7 +62,7 @@ class WireProxySOCKS5Handler {
 
                 let response = Data([0x05, 0x00])
                 self.clientConnection.send(content: response, completion: .contentProcessed { [weak self] sendError in
-                    Task { @MainActor [weak self] in
+                    self?.queue.async { [weak self] in
                         guard let self, !self.isCancelled else { return }
                         if sendError != nil { self.finish(error: true); return }
                         self.readSOCKS5Request()
@@ -76,7 +74,7 @@ class WireProxySOCKS5Handler {
 
     private func readSOCKS5Request() {
         clientConnection.receive(minimumIncompleteLength: 4, maximumLength: 512) { [weak self] data, _, _, error in
-            Task { @MainActor [weak self] in
+            self?.queue.async { [weak self] in
                 guard let self, !self.isCancelled else { return }
                 if error != nil { self.finish(error: true); return }
                 guard let data, data.count >= 4, data[0] == 0x05, data[1] == 0x01 else {
@@ -154,7 +152,7 @@ class WireProxySOCKS5Handler {
     private func sendSOCKS5Error(_ rep: UInt8) {
         let response = Data([0x05, rep, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
         clientConnection.send(content: response, completion: .contentProcessed { [weak self] _ in
-            Task { @MainActor [weak self] in
+            self?.queue.async { [weak self] in
                 self?.finish(error: true)
             }
         })
@@ -181,10 +179,8 @@ class WireProxySOCKS5Handler {
 
     private func startTimeout() {
         let work = DispatchWorkItem { [weak self] in
-            Task { @MainActor [weak self] in
-                guard let self, !self.isCancelled else { return }
-                self.finish(error: true)
-            }
+            guard let self, !self.isCancelled else { return }
+            self.finish(error: true)
         }
         timeoutWork = work
         queue.asyncAfter(deadline: .now() + timeoutSeconds, execute: work)

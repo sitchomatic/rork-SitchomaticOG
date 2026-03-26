@@ -4,11 +4,9 @@ import CoreImage
 import CoreImage.CIFilterBuiltins
 import UIKit
 
-@MainActor
 class VisionMLService {
     static let shared = VisionMLService()
 
-    private let logger = DebugLogger.shared
     private let ciContext = CIContext()
     private var cachedSaliencyResults: [Int: [CGRect]] = [:]
 
@@ -92,7 +90,14 @@ class VisionMLService {
         do {
             try handler.perform([request])
         } catch {
-            logger.logError("VisionML: OCR perform failed", error: error, category: .automation)
+            let nsError = error as NSError
+            let underlyingError = nsError.userInfo[NSUnderlyingErrorKey] as? NSError
+            let underlyingDescription = underlyingError.map { " | underlying=\($0.domain) (\($0.code)): \($0.localizedDescription)" } ?? ""
+            DebugLogger.logBackground(
+                "VisionML: OCR perform failed: \(nsError.localizedDescription) [domain=\(nsError.domain), code=\(nsError.code)]\(underlyingDescription)",
+                category: .automation,
+                level: .error
+            )
             return []
         }
 
@@ -126,7 +131,7 @@ class VisionMLService {
         }
 
         let elapsed = Int(Date().timeIntervalSince(startTime) * 1000)
-        logger.log("VisionML: OCR found \(elements.count) text elements in \(elapsed)ms", category: .automation, level: .debug)
+        DebugLogger.logBackground("VisionML: OCR found \(elements.count) text elements in \(elapsed)ms", category: .automation, level: .debug)
 
         return elements
     }
@@ -215,7 +220,7 @@ class VisionMLService {
         let confidence = Double(foundCount) / 3.0
 
         let elapsed = Int(Date().timeIntervalSince(startTime) * 1000)
-        logger.log("VisionML: login detection — email:\(emailField != nil) pass:\(passwordField != nil) btn:\(loginButton != nil) confidence:\(String(format: "%.0f%%", confidence * 100)) in \(elapsed)ms", category: .automation, level: foundCount >= 2 ? .success : .warning)
+        DebugLogger.logBackground("VisionML: login detection — email:\(emailField != nil) pass:\(passwordField != nil) btn:\(loginButton != nil) confidence:\(String(format: "%.0f%%", confidence * 100)) in \(elapsed)ms", category: .automation, level: foundCount >= 2 ? .success : .warning)
 
         return LoginFieldDetection(
             emailField: emailField,
@@ -340,7 +345,7 @@ class VisionMLService {
         for phrase in smsNotificationPhrases {
             if fullLower.contains(phrase) {
                 let matchedLine = allText.first { $0.text.lowercased().contains(phrase) }?.text ?? phrase
-                logger.log("VisionML: SMS NOTIFICATION detected via OCR — '\(phrase)'", category: .automation, level: .critical)
+                DebugLogger.logBackground("VisionML: SMS NOTIFICATION detected via OCR — '\(phrase)'", category: .automation, level: .critical)
                 return (.smsDetected, matchedLine, fullText)
             }
         }
@@ -348,7 +353,7 @@ class VisionMLService {
         for phrase in tempDisabledPhrases {
             if fullLower.contains(phrase) {
                 let matchedLine = allText.first { $0.text.lowercased().contains(phrase) }?.text ?? phrase
-                logger.log("VisionML: TEMP DISABLED detected via OCR — '\(phrase)'", category: .automation, level: .critical)
+                DebugLogger.logBackground("VisionML: TEMP DISABLED detected via OCR — '\(phrase)'", category: .automation, level: .critical)
                 return (.tempDisabled, matchedLine, fullText)
             }
         }
@@ -356,7 +361,7 @@ class VisionMLService {
         for phrase in permDisabledPhrases {
             if fullLower.contains(phrase) {
                 let matchedLine = allText.first { $0.text.lowercased().contains(phrase) }?.text ?? phrase
-                logger.log("VisionML: PERM DISABLED detected via OCR — '\(phrase)'", category: .automation, level: .critical)
+                DebugLogger.logBackground("VisionML: PERM DISABLED detected via OCR — '\(phrase)'", category: .automation, level: .critical)
                 return (.permDisabled, matchedLine, fullText)
             }
         }
@@ -379,7 +384,7 @@ class VisionMLService {
         }
 
         if disabledScore >= 40 {
-            logger.log("VisionML: PERM DISABLED detected via weak signal scoring (\(disabledScore))", category: .automation, level: .critical)
+            DebugLogger.logBackground("VisionML: PERM DISABLED detected via weak signal scoring (\(disabledScore))", category: .automation, level: .critical)
             return (.permDisabled, matchedWeak, fullText)
         }
 
@@ -400,7 +405,8 @@ class VisionMLService {
         do {
             try handler.perform([request])
         } catch {
-            logger.logError("VisionML: rectangle detection failed", error: error, category: .automation)
+            let nsError = error as NSError
+            DebugLogger.logBackground("VisionML: rectangle detection failed: \(nsError.localizedDescription) [domain=\(nsError.domain), code=\(nsError.code)]", category: .automation, level: .error)
             return []
         }
 
@@ -429,7 +435,8 @@ class VisionMLService {
         do {
             try handler.perform([request])
         } catch {
-            logger.logError("VisionML: instance mask failed", error: error, category: .automation)
+            let nsError = error as NSError
+            DebugLogger.logBackground("VisionML: instance mask failed: \(nsError.localizedDescription) [domain=\(nsError.domain), code=\(nsError.code)]", category: .automation, level: .error)
             return []
         }
 
@@ -468,12 +475,12 @@ class VisionMLService {
                     predictedType: classifyRegion(box: pixelBox, imageSize: imageSize)
                 ))
             } catch {
-                logger.log("VisionML: mask generation failed for instance \(index)", category: .automation, level: .warning)
+                DebugLogger.logBackground("VisionML: mask generation failed for instance \(index)", category: .automation, level: .warning)
             }
         }
 
         let elapsed = Int(Date().timeIntervalSince(startTime) * 1000)
-        logger.log("VisionML: detected \(regions.count) foreground instances in \(elapsed)ms", category: .automation, level: .debug)
+        DebugLogger.logBackground("VisionML: detected \(regions.count) foreground instances in \(elapsed)ms", category: .automation, level: .debug)
         return regions
     }
 
@@ -492,7 +499,8 @@ class VisionMLService {
         do {
             try handler.perform([attentionRequest, objectnessRequest])
         } catch {
-            logger.logError("VisionML: saliency detection failed", error: error, category: .automation)
+            let nsError = error as NSError
+            DebugLogger.logBackground("VisionML: saliency detection failed: \(nsError.localizedDescription) [domain=\(nsError.domain), code=\(nsError.code)]", category: .automation, level: .error)
             return SaliencyResult(hotspots: [], primaryFocus: nil, processingTimeMs: 0)
         }
 
@@ -527,7 +535,7 @@ class VisionMLService {
 
         let elapsed = Int(Date().timeIntervalSince(startTime) * 1000)
         let primaryFocus = hotspots.max(by: { $0.width * $0.height < $1.width * $1.height })
-        logger.log("VisionML: saliency found \(hotspots.count) hotspots in \(elapsed)ms", category: .automation, level: .debug)
+        DebugLogger.logBackground("VisionML: saliency found \(hotspots.count) hotspots in \(elapsed)ms", category: .automation, level: .debug)
 
         return SaliencyResult(hotspots: hotspots, primaryFocus: primaryFocus, processingTimeMs: elapsed)
     }
@@ -669,7 +677,7 @@ class VisionMLService {
         let confidence = Double(foundCount) / 3.0
 
         let elapsed = Int(Date().timeIntervalSince(startTime) * 1000)
-        logger.log("VisionML DEEP: email:\(emailField != nil) pass:\(passwordField != nil) btn:\(loginButton != nil) instances:\(enrichedInstances.count) saliency:\(saliency.hotspots.count) ai:\(aiEnhanced) conf:\(String(format: "%.0f%%", confidence * 100)) in \(elapsed)ms", category: .automation, level: foundCount >= 2 ? .success : .warning)
+        DebugLogger.logBackground("VisionML DEEP: email:\(emailField != nil) pass:\(passwordField != nil) btn:\(loginButton != nil) instances:\(enrichedInstances.count) saliency:\(saliency.hotspots.count) ai:\(aiEnhanced) conf:\(String(format: "%.0f%%", confidence * 100)) in \(elapsed)ms", category: .automation, level: foundCount >= 2 ? .success : .warning)
 
         return LoginFieldDetection(
             emailField: emailField,

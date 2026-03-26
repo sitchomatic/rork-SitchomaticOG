@@ -116,7 +116,6 @@ class TestDebugSession: Identifiable {
     var finalScreenshot: UIImage?
     var errorMessage: String?
     var logs: [PPSRLogEntry] = []
-    var webViewIndex: Int = 0
 
     var duration: TimeInterval? {
         guard let start = startedAt else { return nil }
@@ -155,7 +154,6 @@ nonisolated struct TestDebugSettingsSnapshot: Sendable {
     let postSubmitDelayMs: Int
     let clearCookiesBetweenAttempts: Bool
     let sessionIsolation: AutomationSettings.SessionIsolationMode
-    let webViewPoolIndex: Int
 
     func toAutomationSettings(base: AutomationSettings) -> AutomationSettings {
         var s = base
@@ -198,7 +196,7 @@ nonisolated struct TestDebugSettingsSnapshot: Sendable {
             return .direct
 
         case .nodeMaven:
-            if let proxy = nodeMaven.generateProxyConfigForSession(webViewPoolIndex) {
+            if let proxy = nodeMaven.generateProxyConfigForSession(0) {
                 return .socks5(proxy)
             }
             return .direct

@@ -422,8 +422,6 @@ class TestDebugViewModel {
         session.logs.append(PPSRLogEntry(message: "Network: \(netConfigLabel)", level: .info))
         session.logs.append(PPSRLogEntry(message: "Pattern: \(snapshot.pattern) | Typing: \(snapshot.typingSpeedMinMs)-\(snapshot.typingSpeedMaxMs)ms | Stealth: \(snapshot.stealthJSInjection)", level: .info))
 
-        session.webViewIndex = snapshot.webViewPoolIndex
-
         session.logs.append(PPSRLogEntry(message: "Pre-check: probing \(testURL.host ?? "target")...", level: .info))
         let preCheckOk = await runConnectionPreCheck(url: testURL)
         if !preCheckOk {
