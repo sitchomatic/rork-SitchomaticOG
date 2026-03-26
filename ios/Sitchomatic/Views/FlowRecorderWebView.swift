@@ -522,7 +522,7 @@ struct FlowRecorderWebView: UIViewRepresentable {
             logger.logHealing(category: .webView, originalError: classified.userMessage, healingAction: "Retrying navigation (attempt #\(retryCount), backoff \(backoff)ms)", succeeded: true, attemptNumber: retryCount)
 
             let currentRetryCount = retryCount
-            let retryURL = parent.url as URL
+            let retryURL = parent.url
             Task { @MainActor [weak self] in
                 try? await Task.sleep(nanoseconds: UInt64(backoff) * 1_000_000)
                 guard let self else { return }
