@@ -1,6 +1,5 @@
 import Foundation
 
-@MainActor
 class WebViewTracker {
     static let shared = WebViewTracker()
 
@@ -28,7 +27,7 @@ class WebViewTracker {
 
     func reset() {
         activeCount = 0
-        DebugLogger.shared.log("WebViewTracker: force-reset (created:\(totalCreated) released:\(totalReleased))", category: .webView, level: .warning)
+        DebugLogger.logBackground("WebViewTracker: force-reset (created:\(totalCreated) released:\(totalReleased))", category: .webView, level: .warning)
     }
 
     var diagnosticSummary: String {

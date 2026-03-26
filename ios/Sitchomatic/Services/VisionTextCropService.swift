@@ -2,11 +2,8 @@ import Foundation
 import Vision
 import UIKit
 
-@MainActor
 class VisionTextCropService {
     static let shared = VisionTextCropService()
-
-    private let logger = DebugLogger.shared
 
     nonisolated struct CropResult: Sendable {
         let croppedImage: UIImage
@@ -86,7 +83,7 @@ class VisionTextCropService {
         do {
             try handler.perform([request])
         } catch {
-            logger.logError("VisionTextCrop: OCR failed", error: error, category: .screenshot)
+            DebugLogger.logBackground("VisionTextCrop: OCR failed: \(error.localizedDescription)", category: .screenshot, level: .error)
             return AnalysisResult(allText: "", crucialMatches: [], detectedOutcome: .unknown, confidence: 0, textBlocks: [], processingTimeMs: 0)
         }
 
@@ -149,7 +146,7 @@ class VisionTextCropService {
         }
 
         let elapsed = Int(Date().timeIntervalSince(startTime) * 1000)
-        logger.log("VisionTextCrop: analyzed \(textBlocks.count) blocks, \(crucialMatches.count) crucial matches, outcome=\(detectedOutcome.rawValue) in \(elapsed)ms", category: .screenshot, level: crucialMatches.isEmpty ? .debug : .info)
+        DebugLogger.logBackground("VisionTextCrop: analyzed \(textBlocks.count) blocks, \(crucialMatches.count) crucial matches, outcome=\(detectedOutcome.rawValue) in \(elapsed)ms", category: .screenshot, level: crucialMatches.isEmpty ? .debug : .info)
 
         return AnalysisResult(
             allText: allText,
@@ -205,7 +202,7 @@ class VisionTextCropService {
 
         if let cropped = cropImage(cgImage, to: textBodyRect, padding: 40, imageSize: imageSize, original: image) {
             let elapsed = Int(Date().timeIntervalSince(startTime) * 1000)
-            logger.log("VisionTextCrop: smart cropped to \(Int(textBodyRect.width))x\(Int(textBodyRect.height)) from \(Int(imageSize.width))x\(Int(imageSize.height)) (\(crucialBlocks.count) crucial blocks) in \(elapsed)ms", category: .screenshot, level: .info)
+            DebugLogger.logBackground("VisionTextCrop: smart cropped to \(Int(textBodyRect.width))x\(Int(textBodyRect.height)) from \(Int(imageSize.width))x\(Int(imageSize.height)) (\(crucialBlocks.count) crucial blocks) in \(elapsed)ms", category: .screenshot, level: .info)
             return CropResult(croppedImage: cropped, fullImage: image, detectedTexts: nearbyBlocks, crucialKeywords: analysisResult.crucialMatches, cropRect: textBodyRect, processingTimeMs: elapsed)
         }
 

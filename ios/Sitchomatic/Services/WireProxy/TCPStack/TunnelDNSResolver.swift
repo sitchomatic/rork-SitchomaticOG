@@ -1,20 +1,18 @@
 import Foundation
 
-@MainActor
 class TunnelDNSResolver {
     private var dnsServers: [UInt32] = []
     private var cache: [String: (ip: UInt32, expiry: Date)] = [:]
     private let cacheTTL: TimeInterval = 300
     private let queryTimeoutSeconds: TimeInterval = 5
     private let maxRetries: Int = 2
-    private let logger = DebugLogger.shared
     private var pendingQueries: [UInt16: (String, CheckedContinuation<UInt32?, Never>)] = [:]
     var sendPacketHandler: ((Data) -> Void)?
     private var sourceIP: UInt32 = 0
     private var nextQueryID: UInt16 = 1
     private var inflightHostnames: [String: Task<UInt32?, Never>] = [:]
     private var queryFrequency: [String: Int] = [:]
-    private var backgroundRefreshTimer: Timer?
+    private var backgroundRefreshTask: Task<Void, Never>?
     private let backgroundRefreshInterval: TimeInterval = 120
     private let frequentQueryThreshold: Int = 3
 
@@ -35,7 +33,7 @@ class TunnelDNSResolver {
 
         self.dnsServers = servers
         let serverNames = servers.map { formatDNSIP($0) }.joined(separator: " → ")
-        logger.log("TunnelDNS: configured chain: \(serverNames)", category: .vpn, level: .info)
+        DebugLogger.logBackground("TunnelDNS: configured chain: \(serverNames)", category: .vpn, level: .info)
     }
 
     func resolve(_ hostname: String) async -> UInt32? {
@@ -48,7 +46,7 @@ class TunnelDNSResolver {
         if let cached = cache[hostname], cached.expiry > Date() {
             let remaining = cached.expiry.timeIntervalSinceNow
             if remaining < cacheTTL * 0.2 && queryFrequency[hostname, default: 0] >= frequentQueryThreshold {
-                Task { @MainActor [weak self] in
+                Task { [weak self] in
                     _ = await self?.performResolve(hostname)
                 }
             }
@@ -59,7 +57,7 @@ class TunnelDNSResolver {
             return await existingTask.value
         }
 
-        let task = Task<UInt32?, Never> { @MainActor in
+        let task = Task<UInt32?, Never> {
             return await self.performResolve(hostname)
         }
         inflightHostnames[hostname] = task
@@ -69,17 +67,19 @@ class TunnelDNSResolver {
     }
 
     func startBackgroundRefresh() {
-        backgroundRefreshTimer?.invalidate()
-        backgroundRefreshTimer = Timer.scheduledTimer(withTimeInterval: backgroundRefreshInterval, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
+        backgroundRefreshTask?.cancel()
+        backgroundRefreshTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(self?.backgroundRefreshInterval ?? 120))
+                guard !Task.isCancelled else { break }
                 self?.refreshFrequentEntries()
             }
         }
     }
 
     func stopBackgroundRefresh() {
-        backgroundRefreshTimer?.invalidate()
-        backgroundRefreshTimer = nil
+        backgroundRefreshTask?.cancel()
+        backgroundRefreshTask = nil
     }
 
     private func refreshFrequentEntries() {
@@ -93,10 +93,10 @@ class TunnelDNSResolver {
 
         guard !hostsNearExpiry.isEmpty else { return }
 
-        logger.log("TunnelDNS: background refreshing \(hostsNearExpiry.count) frequent entries", category: .vpn, level: .debug)
+        DebugLogger.logBackground("TunnelDNS: background refreshing \(hostsNearExpiry.count) frequent entries", category: .vpn, level: .debug)
 
         for hostname in hostsNearExpiry.prefix(5) {
-            Task { @MainActor [weak self] in
+            Task { [weak self] in
                 _ = await self?.performResolve(hostname)
             }
         }
@@ -115,17 +115,17 @@ class TunnelDNSResolver {
                 }
             }
             if serverIndex < dnsServers.count - 1 {
-                logger.log("TunnelDNS: \(formatDNSIP(server)) failed for \(hostname), trying next", category: .vpn, level: .warning)
+                DebugLogger.logBackground("TunnelDNS: \(formatDNSIP(server)) failed for \(hostname), trying next", category: .vpn, level: .warning)
             }
         }
 
         if let systemResult = await systemDNSResolve(hostname) {
-            logger.log("TunnelDNS: system DNS resolved \(hostname) → \(formatDNSIP(systemResult))", category: .vpn, level: .info)
+            DebugLogger.logBackground("TunnelDNS: system DNS resolved \(hostname) → \(formatDNSIP(systemResult))", category: .vpn, level: .info)
             cache[hostname] = (ip: systemResult, expiry: Date().addingTimeInterval(cacheTTL))
             return systemResult
         }
 
-        logger.log("TunnelDNS: all DNS tiers exhausted for \(hostname)", category: .vpn, level: .error)
+        DebugLogger.logBackground("TunnelDNS: all DNS tiers exhausted for \(hostname)", category: .vpn, level: .error)
         return nil
     }
 
@@ -191,11 +191,11 @@ class TunnelDNSResolver {
             let capturedTimeout = self.queryTimeoutSeconds
             let capturedHostname = hostname
             let capturedDNSServer = dnsServer
-            Task { @MainActor [weak self] in
+            Task { [weak self] in
                 try? await Task.sleep(for: .seconds(capturedTimeout))
                 guard let self else { return }
                 if let pending = self.pendingQueries.removeValue(forKey: queryID) {
-                    self.logger.log("TunnelDNS: timeout resolving \(capturedHostname) via \(self.formatDNSIP(capturedDNSServer)) after \(Int(capturedTimeout))s", category: .vpn, level: .warning)
+                    DebugLogger.logBackground("TunnelDNS: timeout resolving \(capturedHostname) via \(self.formatDNSIP(capturedDNSServer)) after \(Int(capturedTimeout))s", category: .vpn, level: .warning)
                     pending.1.resume(returning: nil)
                 }
             }
@@ -223,7 +223,7 @@ class TunnelDNSResolver {
         guard let (hostname, continuation) = pendingQueries.removeValue(forKey: queryID) else { return }
 
         guard rcode == 0 else {
-            logger.log("TunnelDNS: DNS error rcode=\(rcode) for \(hostname) from \(ipPacket.header.sourceIP)", category: .vpn, level: .warning)
+            DebugLogger.logBackground("TunnelDNS: DNS error rcode=\(rcode) for \(hostname) from \(ipPacket.header.sourceIP)", category: .vpn, level: .warning)
             continuation.resume(returning: nil)
             return
         }
@@ -231,7 +231,7 @@ class TunnelDNSResolver {
         let anCount = Int(readBE16(udpPayload, offset: 6))
 
         if anCount == 0 {
-            logger.log("TunnelDNS: empty answer (0 records) for \(hostname) from \(ipPacket.header.sourceIP)", category: .vpn, level: .warning)
+            DebugLogger.logBackground("TunnelDNS: empty answer (0 records) for \(hostname) from \(ipPacket.header.sourceIP)", category: .vpn, level: .warning)
             continuation.resume(returning: nil)
             return
         }
@@ -239,10 +239,10 @@ class TunnelDNSResolver {
         if let ip = parseDNSResponseForA(udpPayload) {
             cache[hostname] = (ip: ip, expiry: Date().addingTimeInterval(cacheTTL))
             let ipStr = "\((ip >> 24) & 0xFF).\((ip >> 16) & 0xFF).\((ip >> 8) & 0xFF).\(ip & 0xFF)"
-            logger.log("TunnelDNS: resolved \(hostname) → \(ipStr) via \(ipPacket.header.sourceIP)", category: .vpn, level: .debug)
+            DebugLogger.logBackground("TunnelDNS: resolved \(hostname) → \(ipStr) via \(ipPacket.header.sourceIP)", category: .vpn, level: .debug)
             continuation.resume(returning: ip)
         } else {
-            logger.log("TunnelDNS: no A record in \(anCount) answers for \(hostname) from \(ipPacket.header.sourceIP)", category: .vpn, level: .warning)
+            DebugLogger.logBackground("TunnelDNS: no A record in \(anCount) answers for \(hostname) from \(ipPacket.header.sourceIP)", category: .vpn, level: .warning)
             continuation.resume(returning: nil)
         }
     }
@@ -374,11 +374,11 @@ class TunnelDNSResolver {
     func verifyDNS() async -> Bool {
         let testDomain = "nordvpn.com"
         if let _ = await resolve(testDomain) {
-            logger.log("TunnelDNS: verification PASSED — resolved \(testDomain)", category: .vpn, level: .success)
+            DebugLogger.logBackground("TunnelDNS: verification PASSED — resolved \(testDomain)", category: .vpn, level: .success)
             cache.removeValue(forKey: testDomain)
             return true
         }
-        logger.log("TunnelDNS: verification FAILED — could not resolve \(testDomain)", category: .vpn, level: .error)
+        DebugLogger.logBackground("TunnelDNS: verification FAILED — could not resolve \(testDomain)", category: .vpn, level: .error)
         return false
     }
 }
