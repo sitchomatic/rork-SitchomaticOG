@@ -90,8 +90,8 @@ class LoginAutomationEngine {
             attempt.logs.append(PPSRLogEntry(message: "AI Health: \(healthPrediction.risk.rawValue) risk (\(Int(healthPrediction.failureProbability * 100))%) — \(healthPrediction.recommendation)", level: healthPrediction.risk == .high ? .warning : .info))
         }
 
-        if !circuitBreaker.shouldAllow(host: host) {
-            let remaining = Int(circuitBreaker.cooldownRemaining(host: host))
+        if !(await circuitBreaker.shouldAllow(host: host)) {
+            let remaining = Int(await circuitBreaker.cooldownRemaining(host: host))
             logger.log("CircuitBreaker: BLOCKED \(host) — cooldown \(remaining)s remaining", category: .network, level: .warning)
             attempt.status = .failed
             attempt.errorMessage = "Host circuit breaker open — cooldown \(remaining)s"
@@ -210,23 +210,23 @@ class LoginAutomationEngine {
             logger.log("CONNECTION FAILURE for \(attempt.credential.username) on \(targetURL.host ?? "")", category: .network, level: .error, sessionId: sessionId, durationMs: totalMs)
             onURLFailure?(targetURL.absoluteString)
             onUnusualFailure?("Connection failure for \(attempt.credential.username)")
-            circuitBreaker.recordFailure(host: host, type: .connectionError)
-            urlQualityScoring.recordFailure(urlString: targetURL.absoluteString, failureType: "connectionFailure")
+            await circuitBreaker.recordFailure(host: host, type: .connectionError)
+            await urlQualityScoring.recordFailure(urlString: targetURL.absoluteString, failureType: "connectionFailure")
         }
 
         if outcome == .timeout {
-            circuitBreaker.recordFailure(host: host, type: .timeout)
-            urlQualityScoring.recordFailure(urlString: targetURL.absoluteString, failureType: "timeout")
+            await circuitBreaker.recordFailure(host: host, type: .timeout)
+            await urlQualityScoring.recordFailure(urlString: targetURL.absoluteString, failureType: "timeout")
         }
 
         if outcome == .success || outcome == .noAcc || outcome == .permDisabled || outcome == .tempDisabled {
             onURLSuccess?(targetURL.absoluteString)
-            circuitBreaker.recordSuccess(host: host)
+            await circuitBreaker.recordSuccess(host: host)
             if let started = attempt.startedAt {
-                urlQualityScoring.recordSuccess(urlString: targetURL.absoluteString, latencyMs: Int(Date().timeIntervalSince(started) * 1000))
+                await urlQualityScoring.recordSuccess(urlString: targetURL.absoluteString, latencyMs: Int(Date().timeIntervalSince(started) * 1000))
             }
             if outcome == .success {
-                urlQualityScoring.recordLoginSuccess(urlString: targetURL.absoluteString)
+                await urlQualityScoring.recordLoginSuccess(urlString: targetURL.absoluteString)
                 hostFingerprint.recordPatternOutcome(host: host, pattern: "last_used", success: true)
             }
         }
@@ -303,7 +303,7 @@ class LoginAutomationEngine {
             wasChallenge: aiIsChallenge,
             wasConnectionFailure: outcome == .connectionFailure,
             fingerprintDetected: session.lastFingerprintScore.map { !$0.passed } ?? false,
-            circuitBreakerOpen: circuitBreaker.status(for: host) == .open,
+            circuitBreakerOpen: await circuitBreaker.status(for: host) == .open,
             consecutiveFailuresOnHost: hostProfile?.consecutiveFailures ?? 0,
             activeSessions: activeSessions,
             timestamp: Date()
