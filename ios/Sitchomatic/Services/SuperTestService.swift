@@ -506,7 +506,7 @@ class SuperTestService {
                 return score
             }
         } catch {
-            // JS evaluation can fail when page is still loading; return 0 as fallback score
+            logger.log("SuperTest: JS score evaluation failed, using fallback score 0", category: .superTest, level: .debug)
         }
 
         return 0

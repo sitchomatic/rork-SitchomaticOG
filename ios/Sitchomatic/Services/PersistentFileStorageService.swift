@@ -125,29 +125,42 @@ class PersistentFileStorageService {
         Task.detached(priority: .utility) { [credEntries, workingText, cardEntries, flows, automationData, logEntries, networkState, appState, configJSON] in
             let encoder = JSONEncoder()
             encoder.outputFormatting = .prettyPrinted
+            var saveErrors: [String] = []
 
-            try? configJSON.data(using: .utf8)?.write(to: configDir.appendingPathComponent("full_config.json"))
-            try? configJSON.data(using: .utf8)?.write(to: configDir.appendingPathComponent("config_\(ts).json"))
+            do {
+                try configJSON.data(using: .utf8)?.write(to: configDir.appendingPathComponent("full_config.json"))
+            } catch { saveErrors.append("full_config.json: \(error.localizedDescription)") }
+
+            do {
+                try configJSON.data(using: .utf8)?.write(to: configDir.appendingPathComponent("config_\(ts).json"))
+            } catch { saveErrors.append("config_\(ts).json: \(error.localizedDescription)") }
 
             if !credEntries.isEmpty {
-                if let data = try? encoder.encode(credEntries) {
-                    try? data.write(to: credDir.appendingPathComponent("credentials.json"))
-                }
-                try? workingText.data(using: .utf8)?.write(to: credDir.appendingPathComponent("working.txt"))
+                do {
+                    let data = try encoder.encode(credEntries)
+                    try data.write(to: credDir.appendingPathComponent("credentials.json"))
+                } catch { saveErrors.append("credentials.json: \(error.localizedDescription)") }
+                do {
+                    try workingText.data(using: .utf8)?.write(to: credDir.appendingPathComponent("working.txt"))
+                } catch { saveErrors.append("working.txt: \(error.localizedDescription)") }
             }
 
             if !cardEntries.isEmpty {
-                if let data = try? encoder.encode(cardEntries) {
-                    try? data.write(to: cardDir.appendingPathComponent("cards.json"))
-                }
+                do {
+                    let data = try encoder.encode(cardEntries)
+                    try data.write(to: cardDir.appendingPathComponent("cards.json"))
+                } catch { saveErrors.append("cards.json: \(error.localizedDescription)") }
             }
 
-            if let data = try? encoder.encode(networkState) {
-                try? data.write(to: netDir.appendingPathComponent("network_state.json"))
-            }
+            do {
+                let data = try encoder.encode(networkState)
+                try data.write(to: netDir.appendingPathComponent("network_state.json"))
+            } catch { saveErrors.append("network_state.json: \(error.localizedDescription)") }
 
             if let aData = automationData {
-                try? aData.write(to: configDir.appendingPathComponent("automation_settings.json"))
+                do {
+                    try aData.write(to: configDir.appendingPathComponent("automation_settings.json"))
+                } catch { saveErrors.append("automation_settings.json: \(error.localizedDescription)") }
             }
 
             let recentErrors = logEntries.filter { $0.level >= .error }.prefix(500)
@@ -158,23 +171,32 @@ class PersistentFileStorageService {
             let allLines = recentAll.map { "[\($0.level.rawValue)] [\($0.category.rawValue)] \(DateFormatters.fullTimestamp.string(from: $0.timestamp)) \($0.message)" }
             try? allLines.joined(separator: "\n").data(using: .utf8)?.write(to: dbgDir.appendingPathComponent("full_log.log"))
 
-            if !flows.isEmpty, let data = try? encoder.encode(flows) {
-                try? data.write(to: flDir.appendingPathComponent("recorded_flows.json"))
+            if !flows.isEmpty {
+                do {
+                    let data = try encoder.encode(flows)
+                    try data.write(to: flDir.appendingPathComponent("recorded_flows.json"))
+                } catch { saveErrors.append("recorded_flows.json: \(error.localizedDescription)") }
             }
 
-            if let data = try? encoder.encode(appState) {
-                try? data.write(to: stDir.appendingPathComponent("app_state.json"))
-            }
+            do {
+                let data = try encoder.encode(appState)
+                try data.write(to: stDir.appendingPathComponent("app_state.json"))
+            } catch { saveErrors.append("app_state.json: \(error.localizedDescription)") }
 
             let manifest = ScreenshotManifest(savedAt: Date().timeIntervalSince1970, note: "Screenshots are stored in-memory during runtime.")
-            if let data = try? encoder.encode(manifest) {
-                try? data.write(to: ssDir.appendingPathComponent("manifest.json"))
-            }
+            do {
+                let data = try encoder.encode(manifest)
+                try data.write(to: ssDir.appendingPathComponent("manifest.json"))
+            } catch { saveErrors.append("manifest.json: \(error.localizedDescription)") }
 
             await MainActor.run {
                 PersistentFileStorageService.shared.isSaving = false
                 PersistentFileStorageService.shared.pruneOldFiles(in: configDir, prefix: "config_", keepCount: 5)
-                DebugLogger.shared.log("PersistentStorage: full state save complete (background)", category: .persistence, level: .success)
+                if saveErrors.isEmpty {
+                    DebugLogger.shared.log("PersistentStorage: full state save complete (background)", category: .persistence, level: .success)
+                } else {
+                    DebugLogger.shared.log("PersistentStorage: save completed with \(saveErrors.count) error(s): \(saveErrors.joined(separator: "; "))", category: .persistence, level: .error)
+                }
             }
         }
     }

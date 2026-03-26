@@ -16,7 +16,9 @@ class ScreenshotCacheService {
     private let autoOffloadThreshold: Int = 30
 
     init() {
-        let cachesDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+        guard let cachesDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else {
+            fatalError("ScreenshotCacheService: caches directory unavailable")
+        }
         cacheDirectory = cachesDir.appendingPathComponent("ScreenshotCache", isDirectory: true)
         try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
     }
@@ -33,7 +35,7 @@ class ScreenshotCacheService {
             aggressiveMemoryEvict()
         }
 
-        let fileURL = fileURL(for: key)
+        guard let fileURL = fileURL(for: key) else { return }
         let jpegData = compressed.jpegData(compressionQuality: 0.4)
         Task.detached(priority: .utility) {
             if let data = jpegData {
@@ -99,7 +101,7 @@ class ScreenshotCacheService {
             return cached
         }
 
-        let fileURL = fileURL(for: key)
+        guard let fileURL = fileURL(for: key) else { return nil }
         guard FileManager.default.fileExists(atPath: fileURL.path()),
               let data = try? Data(contentsOf: fileURL),
               let image = UIImage(data: data) else {
@@ -156,7 +158,7 @@ class ScreenshotCacheService {
         let sizeMax = maxDiskCacheSizeBytes
         Task.detached(priority: .utility) {
             let fm = FileManager.default
-            let cachesDir = fm.urls(for: .cachesDirectory, in: .userDomainMask).first!
+            guard let cachesDir = fm.urls(for: .cachesDirectory, in: .userDomainMask).first else { return }
             let dir = cachesDir.appendingPathComponent("ScreenshotCache", isDirectory: true)
             guard let files = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey]) else { return }
 
@@ -206,10 +208,10 @@ class ScreenshotCacheService {
         return files.filter { $0.pathExtension == "jpg" }.count
     }
 
-    private nonisolated func fileURL(for key: String) -> URL {
+    private nonisolated func fileURL(for key: String) -> URL? {
         let safeKey = key.replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: ":", with: "_")
-        let cachesDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+        guard let cachesDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else { return nil }
         return cachesDir.appendingPathComponent("ScreenshotCache", isDirectory: true).appendingPathComponent("\(safeKey).jpg")
     }
 }

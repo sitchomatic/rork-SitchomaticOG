@@ -1872,6 +1872,7 @@ class LoginSiteWebSession: NSObject {
             if let num = result as? NSNumber { return "\(num)" }
             return nil
         } catch {
+            logger.log("LoginSiteWebSession: JS evaluation failed: \(error.localizedDescription)", category: .login, level: .debug)
             return nil
         }
     }

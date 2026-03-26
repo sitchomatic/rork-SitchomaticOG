@@ -9,6 +9,7 @@ class LoginPersistenceService {
     private let iCloudCredentialsKey = "icloud_login_credentials_v1"
     private let viewModeKey = "login_view_mode_prefs_v1"
     private let historyKey = "login_testing_history_v1"
+    private let logger = DebugLogger.shared
 
     private let store = NSUbiquitousKeyValueStore.default
 
@@ -40,10 +41,13 @@ class LoginPersistenceService {
             return dict
         }
 
-        if let data = try? JSONSerialization.data(withJSONObject: encoded) {
+        do {
+            let data = try JSONSerialization.data(withJSONObject: encoded)
             UserDefaults.standard.set(data, forKey: credentialsKey)
             store.set(data, forKey: iCloudCredentialsKey)
             store.synchronize()
+        } catch {
+            logger.log("LoginPersistence: failed to encode credentials: \(error.localizedDescription)", category: .persistence, level: .error)
         }
     }
 
@@ -55,8 +59,12 @@ class LoginPersistenceService {
             UserDefaults.standard.set(iCloudData, forKey: credentialsKey)
         }
 
-        guard let data,
-              let array = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+        guard let data else {
+            return []
+        }
+
+        guard let array = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] else {
+            logger.log("LoginPersistence: failed to decode saved credentials data", category: .persistence, level: .error)
             return []
         }
 

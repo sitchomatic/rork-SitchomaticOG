@@ -160,7 +160,7 @@ class WireGuardSession {
 
         let trimmedEndpoint = endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
         let parts = trimmedEndpoint.split(separator: ":")
-        guard parts.count >= 2, let port = UInt16(parts.last!) else {
+        guard parts.count >= 2, let lastPart = parts.last, let port = UInt16(lastPart) else {
             lastError = "Invalid endpoint format: \(endpoint)"
             logger.log("WGSession: invalid endpoint format '\(endpoint)'", category: .vpn, level: .error)
             return false

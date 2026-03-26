@@ -317,7 +317,7 @@ class NetworkResilienceService {
                 return latencyMs
             }
         } catch {
-            // Probe failure returns sentinel latency so caller picks a different region
+            logger.log("NetworkResilience: probe failed for region \(region): \(error.localizedDescription)", category: .network, level: .debug)
         }
         return 9999
     }

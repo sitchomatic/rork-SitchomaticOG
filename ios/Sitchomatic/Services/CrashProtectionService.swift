@@ -279,7 +279,11 @@ final class CrashProtectionService {
         App: \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?")
         ===
         """
-        try? diag.write(to: diagURL, atomically: true, encoding: .utf8)
+        do {
+            try diag.write(to: diagURL, atomically: true, encoding: .utf8)
+        } catch {
+            logger.log("CrashProtection: failed to write pre-crash diagnostics: \(error.localizedDescription)", category: .system, level: .error)
+        }
     }
 
     // MARK: - Signal Handlers
@@ -366,9 +370,13 @@ final class CrashProtectionService {
                 screenshotKeys: screenshotKeys
             )
             lastCrashReport = report
-            if let encoded = try? JSONEncoder().encode(report),
-               let reportURL = documentsURL(crashReportFile) {
-                try? encoded.write(to: reportURL, options: .atomic)
+            do {
+                let encoded = try JSONEncoder().encode(report)
+                if let reportURL = documentsURL(crashReportFile) {
+                    try encoded.write(to: reportURL, options: .atomic)
+                }
+            } catch {
+                logger.log("CrashProtection: failed to persist crash report: \(error.localizedDescription)", category: .system, level: .error)
             }
         }
 

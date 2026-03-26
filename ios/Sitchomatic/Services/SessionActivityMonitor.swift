@@ -173,7 +173,7 @@ class SessionActivityMonitor {
                 return true
             }
         } catch {
-            // JS eval failure doesn't mean no activity — webview might be mid-load
+            logger.log("SessionActivity: JS eval failed, assuming no activity change", category: .webView, level: .trace)
         }
         return false
     }
