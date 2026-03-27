@@ -101,7 +101,9 @@ class UserInterventionLearningService {
             }
 
             guard totalKeywords > 0 else { continue }
-            let keywordMatch = Double(matchScore) / Double(pattern.keywords.values.reduce(0, +))
+            let keywordSum = pattern.keywords.values.reduce(0, +)
+            guard keywordSum > 0 else { continue }
+            let keywordMatch = Double(matchScore) / Double(keywordSum)
 
             if keywordMatch > 0.4 {
                 let confidence = min(0.95, 0.5 + (keywordMatch * 0.3) + (min(Double(pattern.correctionCount), 20.0) / 40.0))

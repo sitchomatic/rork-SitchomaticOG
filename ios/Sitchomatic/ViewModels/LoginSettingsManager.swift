@@ -18,6 +18,10 @@ class LoginSettingsManager {
     private let automationSettingsKey = "automation_settings_v1"
     var onLog: ((String, PPSRLogEntry.Level) -> Void)?
 
+    deinit {
+        settingsSaveTask?.cancel()
+    }
+
     var effectiveColorScheme: ColorScheme? {
         appearanceMode.colorScheme
     }
@@ -58,8 +62,11 @@ class LoginSettingsManager {
     func persistAutomationSettings() {
         automationSettings = automationSettings.normalizedTimeouts()
         PPSRStealthService.shared.applySettings(automationSettings)
-        if let data = try? JSONEncoder().encode(automationSettings) {
+        do {
+            let data = try JSONEncoder().encode(automationSettings)
             UserDefaults.standard.set(data, forKey: automationSettingsKey)
+        } catch {
+            DebugLogger.shared.log("LoginSettingsManager: failed to encode automation settings — \(error.localizedDescription)", category: .persistence, level: .error)
         }
     }
 

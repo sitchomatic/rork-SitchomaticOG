@@ -18,6 +18,10 @@ class PPSRSettingsManager {
     private var settingsSaveTask: Task<Void, Never>?
     var onLog: ((String, PPSRLogEntry.Level) -> Void)?
 
+    deinit {
+        settingsSaveTask?.cancel()
+    }
+
     func loadPersistedSettings() {
         if let settings = persistence.loadSettings() {
             testEmail = settings.email

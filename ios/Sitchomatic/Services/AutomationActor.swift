@@ -56,6 +56,11 @@ class AutomationActor {
         logger.startSession(batchId, category: .automation, message: "AutomationActor: batch login — \(attempts.count) attempts across \(urls.count) URLs, maxConcurrency=\(maxConcurrency)")
         totalTasksQueued += attempts.count
 
+        guard !attempts.isEmpty, !urls.isEmpty else {
+            logger.log("AutomationActor: empty attempts or URLs — skipping batch", category: .automation, level: .warning)
+            return Array(repeating: .unsure, count: attempts.count)
+        }
+
         var outcomes: [LoginOutcome] = Array(repeating: .unsure, count: attempts.count)
         let engine = LoginAutomationEngine()
         engine.stealthEnabled = stealthEnabled

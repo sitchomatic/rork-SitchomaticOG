@@ -4,7 +4,7 @@ import SwiftUI
 
 @Observable
 @MainActor
-class LoginViewModel {
+class LoginViewModel: MemoryPressurePersistable {
     static let shared = LoginViewModel()
 
     var credentials: [LoginCredential] = []
@@ -95,6 +95,20 @@ class LoginViewModel {
     private var connectionTestTask: Task<Void, Never>?
     private var forceStopTask: Task<Void, Never>?
     private var autoRetryTask: Task<Void, Never>?
+
+    deinit {
+        pauseCountdownTask?.cancel()
+        batchTask?.cancel()
+        secondaryBatchTask?.cancel()
+        settingsSaveTask?.cancel()
+        credentialsSaveTask?.cancel()
+        heartbeatTask?.cancel()
+        connectionTestTask?.cancel()
+        forceStopTask?.cancel()
+        autoRetryTask?.cancel()
+        logFlushTask?.cancel()
+    }
+
     private var sessionHeartbeatTimeout: TimeInterval {
         TimeoutResolver.resolveHeartbeatTimeout(max(90, testTimeout))
     }
@@ -237,6 +251,10 @@ class LoginViewModel {
         credentialsSaveTask?.cancel()
         credentialsSaveTask = nil
         persistence.saveCredentials(credentials)
+    }
+
+    func persistOnMemoryPressure() {
+        persistCredentialsNow()
     }
 
     func persistSettings() {

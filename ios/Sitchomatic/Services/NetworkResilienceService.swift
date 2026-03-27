@@ -197,6 +197,7 @@ class NetworkResilienceService {
             )
             await MainActor.run {
                 self.lastVerificationResult = result
+                self.logger.log("Resilience: IP verification failed — \(error.localizedDescription)", category: .proxy, level: .warning)
             }
         }
     }

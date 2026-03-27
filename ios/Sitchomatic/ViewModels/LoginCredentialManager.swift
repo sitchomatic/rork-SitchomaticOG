@@ -10,6 +10,10 @@ class LoginCredentialManager {
     private var credentialsSaveTask: Task<Void, Never>?
     var onLog: ((String, PPSRLogEntry.Level) -> Void)?
 
+    deinit {
+        credentialsSaveTask?.cancel()
+    }
+
     var workingCredentials: [LoginCredential] { credentials.filter { $0.status == .working } }
     var noAccCredentials: [LoginCredential] { credentials.filter { $0.status == .noAcc } }
     var permDisabledCredentials: [LoginCredential] { credentials.filter { $0.status == .permDisabled } }

@@ -178,7 +178,10 @@ class PerSessionTunnelManager {
         Task {
             await ensureLocalProxyReady(enabled: localProxyEnabled)
 
-            let ovpn = allOVPN[0]
+            guard let ovpn = allOVPN.first else {
+                openVPNStarting = false
+                return
+            }
             ovpnConfig = ovpn
             await ovpnBridge.start(with: ovpn)
             if ovpnBridge.isActive {

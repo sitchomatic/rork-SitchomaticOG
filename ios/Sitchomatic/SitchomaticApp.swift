@@ -177,6 +177,10 @@ struct SitchomaticApp: App {
 
                     let monitor = MemoryPressureMonitor.shared
                     monitor.register()
+                    monitor.registerPersistables(
+                        login: LoginViewModel.shared,
+                        ppsr: PPSRAutomationViewModel.shared
+                    )
                     monitor.onMemoryWarning {
                         DebugLogger.shared.handleMemoryPressure()
 
@@ -229,18 +233,10 @@ struct SitchomaticApp: App {
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
-                PersistentFileStorageService.shared.forceSave()
-                DebugLogger.shared.persistLatestLog()
-                LoginViewModel.shared.persistCredentialsNow()
-                PPSRAutomationViewModel.shared.persistCardsNow()
-                UnifiedSessionViewModel.shared.persistSessionsNow()
+                AppStabilityCoordinator.shared.persistAllState()
             }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
-                PersistentFileStorageService.shared.forceSave()
-                DebugLogger.shared.persistLatestLog()
-                LoginViewModel.shared.persistCredentialsNow()
-                PPSRAutomationViewModel.shared.persistCardsNow()
-                UnifiedSessionViewModel.shared.persistSessionsNow()
+                AppStabilityCoordinator.shared.persistAllState()
                 BackgroundTaskService.shared.handleAppDidEnterBackground()
             }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
@@ -257,11 +253,7 @@ struct SitchomaticApp: App {
                 if UnifiedSessionViewModel.shared.isRunning {
                     UnifiedSessionViewModel.shared.emergencyStop()
                 }
-                PersistentFileStorageService.shared.forceSave()
-                DebugLogger.shared.persistLatestLog()
-                LoginViewModel.shared.persistCredentialsNow()
-                PPSRAutomationViewModel.shared.persistCardsNow()
-                UnifiedSessionViewModel.shared.persistSessionsNow()
+                AppStabilityCoordinator.shared.persistAllState()
             }
             .alert("Safe Boot Activated", isPresented: $showSafeBootAlert) {
                 Button("OK", role: .cancel) {}

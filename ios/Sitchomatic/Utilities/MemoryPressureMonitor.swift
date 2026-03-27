@@ -1,11 +1,18 @@
 import Foundation
 import UIKit
 
+/// Protocol to decouple MemoryPressureMonitor from concrete ViewModel types
+protocol MemoryPressurePersistable: AnyObject {
+    @MainActor func persistOnMemoryPressure()
+}
+
 @MainActor
 final class MemoryPressureMonitor {
     static let shared = MemoryPressureMonitor()
 
     private var observers: [() -> Void] = []
+    private weak var loginPersistable: MemoryPressurePersistable?
+    private weak var ppsrPersistable: MemoryPressurePersistable?
     private var isRegistered: Bool = false
     private var lastTierTriggered: MemoryTier = .normal
     private var tierEscalationCount: Int = 0
@@ -20,6 +27,12 @@ final class MemoryPressureMonitor {
         nonisolated static func < (lhs: MemoryTier, rhs: MemoryTier) -> Bool {
             lhs.rawValue < rhs.rawValue
         }
+    }
+
+    /// Register persistable objects to avoid direct ViewModel coupling
+    func registerPersistables(login: MemoryPressurePersistable, ppsr: MemoryPressurePersistable) {
+        self.loginPersistable = login
+        self.ppsrPersistable = ppsr
     }
 
     func register() {
@@ -68,8 +81,8 @@ final class MemoryPressureMonitor {
             URLCache.shared.memoryCapacity = 0
 
             PersistentFileStorageService.shared.forceSave()
-            LoginViewModel.shared.persistCredentialsNow()
-            PPSRAutomationViewModel.shared.persistCardsNow()
+            loginPersistable?.persistOnMemoryPressure()
+            ppsrPersistable?.persistOnMemoryPressure()
         }
     }
 

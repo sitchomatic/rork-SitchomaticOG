@@ -382,7 +382,7 @@ class DNSPoolService {
         let queryPacket = buildDNSQuery(hostname: hostname)
 
         let host = NWEndpoint.Host(server.endpoint)
-        let port = NWEndpoint.Port(rawValue: server.port) ?? NWEndpoint.Port(rawValue: 853)!
+        let port = NWEndpoint.Port(rawValue: server.port) ?? NWEndpoint.Port(rawValue: 853) ?? .https
         let tlsOptions = NWProtocolTLS.Options()
         let tcpOptions = NWProtocolTCP.Options()
         tcpOptions.connectionTimeout = 8

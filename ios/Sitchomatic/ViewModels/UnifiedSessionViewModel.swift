@@ -28,6 +28,13 @@ class UnifiedSessionViewModel {
     private let persistenceKey = "unified_sessions_v1"
     private var saveDebouncerTask: Task<Void, Never>?
 
+    deinit {
+        pauseCountdownTask?.cancel()
+        batchTask?.cancel()
+        forceStopTask?.cancel()
+        saveDebouncerTask?.cancel()
+    }
+
     var activeSessions: [DualSiteSession] {
         sessions.filter { $0.globalState == .active }
     }
@@ -166,7 +173,7 @@ class UnifiedSessionViewModel {
                 while sessionIndex < self.sessions.count && !self.isStopping && !Task.isCancelled {
                     let idx = sessionIndex
 
-                    guard !self.sessions[idx].isTerminal else {
+                    guard idx < self.sessions.count, !self.sessions[idx].isTerminal else {
                         sessionIndex += 1
                         continue
                     }
@@ -410,8 +417,11 @@ class UnifiedSessionViewModel {
         saveDebouncerTask = Task {
             try? await Task.sleep(for: .milliseconds(500))
             guard !Task.isCancelled else { return }
-            if let data = try? JSONEncoder().encode(self.sessions) {
+            do {
+                let data = try JSONEncoder().encode(self.sessions)
                 UserDefaults.standard.set(data, forKey: self.persistenceKey)
+            } catch {
+                self.logger.log("UnifiedSessionViewModel: failed to encode sessions for persistence — \(error.localizedDescription)", category: .persistence, level: .error)
             }
         }
     }
@@ -419,8 +429,11 @@ class UnifiedSessionViewModel {
     func persistSessionsNow() {
         saveDebouncerTask?.cancel()
         saveDebouncerTask = nil
-        if let data = try? JSONEncoder().encode(sessions) {
+        do {
+            let data = try JSONEncoder().encode(sessions)
             UserDefaults.standard.set(data, forKey: persistenceKey)
+        } catch {
+            logger.log("UnifiedSessionViewModel: failed to encode sessions — \(error.localizedDescription)", category: .persistence, level: .error)
         }
     }
 

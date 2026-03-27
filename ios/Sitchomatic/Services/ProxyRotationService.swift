@@ -1046,7 +1046,9 @@ class ProxyRotationService {
                         if let http = response as? HTTPURLResponse, http.statusCode == 200, !data.isEmpty {
                             return true
                         }
-                    } catch { }
+                    } catch {
+                        DebugLogger.shared.log("ProxyRotation: connectivity check failed — \(error.localizedDescription)", category: .proxy, level: .debug)
+                    }
                     return false
                 }
             }

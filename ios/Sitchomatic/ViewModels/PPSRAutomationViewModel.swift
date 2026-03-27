@@ -18,7 +18,7 @@ nonisolated struct BatchResult: Sendable {
 
 @Observable
 @MainActor
-class PPSRAutomationViewModel {
+class PPSRAutomationViewModel: MemoryPressurePersistable {
     static let shared = PPSRAutomationViewModel()
 
     var cards: [PPSRCard] = []
@@ -169,6 +169,19 @@ class PPSRAutomationViewModel {
     private var heartbeatTask: Task<Void, Never>?
     private var forceStopTask: Task<Void, Never>?
     private var autoRetryTask: Task<Void, Never>?
+
+    deinit {
+        pauseCountdownTask?.cancel()
+        connectionTestTask?.cancel()
+        batchTask?.cancel()
+        settingsSaveTask?.cancel()
+        cardsSaveTask?.cancel()
+        heartbeatTask?.cancel()
+        forceStopTask?.cancel()
+        autoRetryTask?.cancel()
+        logFlushTask?.cancel()
+    }
+
     private var sessionHeartbeatTimeout: TimeInterval {
         TimeoutResolver.resolveHeartbeatTimeout(max(90, testTimeout))
     }
@@ -286,6 +299,10 @@ class PPSRAutomationViewModel {
         cardsSaveTask?.cancel()
         cardsSaveTask = nil
         persistence.saveCards(cards)
+    }
+
+    func persistOnMemoryPressure() {
+        persistCardsNow()
     }
 
     func persistSettings() {

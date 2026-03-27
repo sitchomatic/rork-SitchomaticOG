@@ -722,7 +722,7 @@ class LoginAutomationEngine {
                 }
             } else {
                 let remaining = priorityPatterns.filter { !usedPatterns.contains($0) }
-                selectedPattern = remaining.first ?? LoginFormPattern.allCases.filter { !usedPatterns.contains($0) }.randomElement() ?? LoginFormPattern.allCases.randomElement()!
+                selectedPattern = remaining.first ?? LoginFormPattern.allCases.filter { !usedPatterns.contains($0) }.randomElement() ?? LoginFormPattern.allCases.randomElement() ?? .visionMLCoordinate
             }
             usedPatterns.append(selectedPattern)
 

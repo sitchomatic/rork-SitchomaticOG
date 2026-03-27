@@ -39,6 +39,11 @@ class TestDebugViewModel {
     var showAppliedToast: Bool = false
 
     private var batchTask: Task<Void, Never>?
+
+    deinit {
+        batchTask?.cancel()
+    }
+
     private let logger = DebugLogger.shared
     private let generator = SettingVariationGenerator.shared
     private let proxyService = ProxyRotationService.shared

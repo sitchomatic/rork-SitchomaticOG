@@ -187,10 +187,7 @@ final class AppStabilityCoordinator {
                 guard !Task.isCancelled, let self else { return }
                 let anyRunning = LoginViewModel.shared.isRunning || PPSRAutomationViewModel.shared.isRunning || UnifiedSessionViewModel.shared.isRunning
                 if anyRunning {
-                    PersistentFileStorageService.shared.forceSave()
-                    LoginViewModel.shared.persistCredentialsNow()
-                    PPSRAutomationViewModel.shared.persistCardsNow()
-                    UnifiedSessionViewModel.shared.persistSessionsNow()
+                    self.persistAllState()
                     self.logger.log("StabilityCoordinator: periodic state persistence (batch active)", category: .persistence, level: .debug)
                 }
             }
@@ -210,6 +207,16 @@ final class AppStabilityCoordinator {
             }
             WebViewTracker.shared.reset()
         }
+    }
+
+    /// Centralized state persistence — single source of truth for all lifecycle persistence.
+    /// Called from SitchomaticApp lifecycle handlers and the periodic persistence timer.
+    func persistAllState() {
+        PersistentFileStorageService.shared.forceSave()
+        DebugLogger.shared.persistLatestLog()
+        LoginViewModel.shared.persistCredentialsNow()
+        PPSRAutomationViewModel.shared.persistCardsNow()
+        UnifiedSessionViewModel.shared.persistSessionsNow()
     }
 
     func safeExecute<T: Sendable>(_ label: String, fallback: T, operation: @MainActor () async throws -> T) async -> T {

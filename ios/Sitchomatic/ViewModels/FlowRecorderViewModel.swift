@@ -3,6 +3,7 @@ import Observation
 import WebKit
 
 @Observable
+@MainActor
 class FlowRecorderViewModel {
     var targetURL: String = "https://joefortune24.com/login"
     var flowName: String = ""

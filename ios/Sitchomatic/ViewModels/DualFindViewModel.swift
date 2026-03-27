@@ -54,6 +54,10 @@ class DualFindViewModel {
     private var runTask: Task<Void, Never>?
     private let persistKey = "dual_find_resume_v2"
 
+    deinit {
+        runTask?.cancel()
+    }
+
     private var joePersistentSessions: [LoginSiteWebSession] = []
     private var ignPersistentSessions: [LoginSiteWebSession] = []
     private var joeCalibrations: [LoginCalibrationService.URLCalibration?] = []

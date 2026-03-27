@@ -9,6 +9,10 @@ class PPSRCardManager {
     private var cardsSaveTask: Task<Void, Never>?
     var onLog: ((String, PPSRLogEntry.Level) -> Void)?
 
+    deinit {
+        cardsSaveTask?.cancel()
+    }
+
     var cardSortOption: PPSRAutomationViewModel.CardSortOption = {
         if let raw = UserDefaults.standard.string(forKey: "ppsr_card_sort_option"),
            let opt = PPSRAutomationViewModel.CardSortOption(rawValue: raw) { return opt }

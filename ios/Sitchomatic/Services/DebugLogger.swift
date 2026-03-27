@@ -22,6 +22,7 @@ class DebugLogger {
     private var pendingEntries: [DebugLogEntry] = []
     private var flushTask: Task<Void, Never>?
     private var persistTask: Task<Void, Never>?
+    private var autoPersistTask: Task<Void, Never>?
     private(set) var totalEntriesLogged: Int = 0
     private(set) var totalEntriesEvicted: Int = 0
 
@@ -449,14 +450,14 @@ class DebugLogger {
     }
 
     private func startAutoPersist() {
-        let task = Task { [weak self] in
+        autoPersistTask?.cancel()
+        autoPersistTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(30))
                 guard !Task.isCancelled else { break }
                 self?.persistLatestLog()
             }
         }
-        _ = task
     }
 
     private func debugButtonConfigSummary() -> String {

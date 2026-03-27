@@ -177,6 +177,8 @@ class LoginSiteWebSession: NSObject {
             WebViewTracker.shared.decrementActive(sessionId: trackerSessionId)
             WebViewPool.shared.unmount(id: sessionId)
         }
+        loadTimeoutTask?.cancel()
+        loadTimeoutTask = nil
         webView = nil
         isPageLoaded = false
         isProtectedRouteBlocked = false

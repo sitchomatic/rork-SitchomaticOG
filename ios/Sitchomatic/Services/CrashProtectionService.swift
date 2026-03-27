@@ -10,6 +10,10 @@ final class CrashProtectionService {
     private var memoryTrimTimer: Task<Void, Never>?
     private var isRegistered: Bool = false
 
+    deinit {
+        memoryTrimTimer?.cancel()
+    }
+
     private var emergencyBatchKillCount: Int = 0
     private var lastEmergencyCleanup: Date = .distantPast
     private var crashCount: Int = 0
