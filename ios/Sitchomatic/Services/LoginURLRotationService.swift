@@ -29,11 +29,34 @@ class LoginURLRotationService {
     // MARK: - Mirror URLs (requires Nord VPN)
 
     static let mirrorJoeURLStrings: [String] = [
-        "https://joefortunepokies.eu/login",
+        // Previously base domains — now mirrors
+        "https://joefortune.eu/login",
+        "https://joefortune.club/login",
+        "https://joefortune.eu.com/login",
+        "https://joefortune.lv/login",
         "https://joefortune.ooo/login",
+        "https://joefortune24.com/login",
+        "https://joefortune36.com/login",
+        "https://joefortuneonlinepokies.com/login",
+        "https://joefortuneonlinepokies.eu/login",
+        "https://joefortuneonlinepokies.net/login",
+        "https://joefortunepokies.com/login",
+        "https://joefortunepokies.eu/login",
+        "https://joefortunepokies.net/login",
     ]
 
     static let mirrorIgnitionURLStrings: [String] = [
+        // Previously base domains — now mirrors
+        "https://static.ignitioncasino.lat/?overlay=login",
+        "https://static.ignitioncasino.cool/?overlay=login",
+        "https://static.ignitioncasino.fun/?overlay=login",
+        "https://static.ignition231.com/?overlay=login",
+        "https://static.ignition165.com/?overlay=login",
+        "https://static.ignition551.com/?overlay=login",
+        "https://static.ignitioncasino.lv/?overlay=login",
+        "https://static.ignitioncasino.eu/?overlay=login",
+        "https://static.ignitioncasino.eu.com/?overlay=login",
+        // Nord-specific mirrors
         "https://ignitionpoker.eu/poker/tournaments?overlay=login",
         "https://ignitioncasino.buzz/poker/tournaments?overlay=login",
     ]
@@ -44,8 +67,6 @@ class LoginURLRotationService {
 
     static let directDNSSafeJoeDomains: Set<String> = [
         "joefortunepokies.win",
-        "joefortune36.com",
-        "joefortune24.com",
     ]
 
     var dontAutoDisableURLsForDirectDNS: Bool = false {
@@ -112,39 +133,14 @@ class LoginURLRotationService {
         loadState()
     }
 
-    static let joeBaseDomains: [String] = [
-        "joefortune.eu",
-        "joefortune.club",
-        "joefortune.eu.com",
-        "joefortune.lv",
-        "joefortune.ooo",
-        "joefortune24.com",
-        "joefortune36.com",
-        "joefortuneonlinepokies.com",
-        "joefortuneonlinepokies.eu",
-        "joefortuneonlinepokies.net",
-        "joefortunepokies.com",
-        "joefortunepokies.eu",
-        "joefortunepokies.net",
-        "joefortunepokies.win",
+    // MARK: - True Base Domains (always active, no VPN required)
+
+    static let defaultJoeURLStrings: [String] = [
+        "https://joefortunepokies.win/login",
     ]
 
-    static let defaultJoeURLStrings: [String] = joeBaseDomains.map { domain in
-        return "https://\(domain)/login"
-    }
-
     static let defaultIgnitionURLStrings: [String] = [
-        "https://static.ignitioncasino.lat/?overlay=login",
-        "https://static.ignitioncasino.cool/?overlay=login",
-        "https://static.ignitioncasino.fun/?overlay=login",
-        "https://static.ignitioncasino.ooo/?overlay=login",
-        "https://static.ignition231.com/?overlay=login",
-        "https://static.ignition165.com/?overlay=login",
-        "https://static.ignition551.com/?overlay=login",
-
-        "https://static.ignitioncasino.lv/?overlay=login",
-        "https://static.ignitioncasino.eu/?overlay=login",
-        "https://static.ignitioncasino.eu.com/?overlay=login",
+        "https://ignitioncasino.ooo/?overlay=login",
     ]
 
     var activeURLs: [RotatingURL] {

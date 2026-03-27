@@ -76,8 +76,8 @@ public enum HyperFlowTaskFactory {
     ) -> PairedTask {
         PairedTask(
             typeName: "LoginDualSite",
-            primaryURL: joeURL ?? URL(string: "https://joefortune24.com/login")!,
-            secondaryURL: ignitionURL ?? URL(string: "https://www.ignitioncasino.eu/login")!,
+            primaryURL: joeURL ?? URL(string: "https://joefortunepokies.win/login")!,
+            secondaryURL: ignitionURL ?? URL(string: "https://ignitioncasino.ooo/?overlay=login")!,
             primaryViewport: standardViewport,
             secondaryViewport: standardViewport
         )
@@ -169,15 +169,15 @@ nonisolated enum LoginTargetSite: String, CaseIterable, Sendable {
 
     var url: URL {
         switch self {
-        case .joefortune: URL(string: "https://joefortune24.com/login")!
-        case .ignition: URL(string: "https://www.ignitioncasino.eu/login")!
+        case .joefortune: URL(string: "https://joefortunepokies.win/login")!
+        case .ignition: URL(string: "https://ignitioncasino.ooo/?overlay=login")!
         }
     }
 
     var host: String {
         switch self {
-        case .joefortune: "joefortune24.com"
-        case .ignition: "ignitioncasino.eu"
+        case .joefortune: "joefortunepokies.win"
+        case .ignition: "ignitioncasino.ooo"
         }
     }
 

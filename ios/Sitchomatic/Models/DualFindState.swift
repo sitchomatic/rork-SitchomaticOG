@@ -72,6 +72,7 @@ nonisolated enum DualFindTestOutcome: Sendable {
     case success
     case disabled
     case transient
+    case fingerprintDetected
     case noAccount
     case unsure
 }

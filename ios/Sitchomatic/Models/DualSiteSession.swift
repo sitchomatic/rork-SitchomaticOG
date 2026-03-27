@@ -127,14 +127,14 @@ nonisolated struct SiteTarget: Codable, Sendable, Identifiable {
     static let joefortune = SiteTarget(
         id: "joe",
         name: "JoeFortune",
-        url: "https://www.joefortunepokies.win/login",
+        url: "https://joefortunepokies.win/login",
         selectors: SiteSelectors(user: "#username", pass: "#password", submit: "#loginSubmit", error: ".error-message")
     )
 
     static let ignition = SiteTarget(
         id: "ignition",
         name: "Ignition",
-        url: "https://www.ignitioncasino.ooo/?overlay=login",
+        url: "https://ignitioncasino.ooo/?overlay=login",
         selectors: SiteSelectors(user: "#email", pass: "#login-password", submit: "#login-submit", error: ".alert-danger")
     )
 }
