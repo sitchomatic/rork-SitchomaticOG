@@ -90,24 +90,14 @@ class EvidenceBundleService {
         let export = generateExport(bundle)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        do {
-            return try encoder.encode(export)
-        } catch {
-            logger.log("EvidenceBundle: JSON export encoding failed: \(error.localizedDescription)", category: .persistence, level: .error)
-            return nil
-        }
+        return try? encoder.encode(export)
     }
 
     func exportBatchAsJSON(_ selectedBundles: [EvidenceBundle]) -> Data? {
         let exports = selectedBundles.map { generateExport($0) }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        do {
-            return try encoder.encode(exports)
-        } catch {
-            logger.log("EvidenceBundle: batch JSON export encoding failed: \(error.localizedDescription)", category: .persistence, level: .error)
-            return nil
-        }
+        return try? encoder.encode(exports)
     }
 
     func exportAsText(_ bundle: EvidenceBundle) -> String {

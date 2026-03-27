@@ -505,9 +505,7 @@ class SuperTestService {
                let score = json["score"] as? Int {
                 return score
             }
-        } catch {
-            logger.log("SuperTest: JS score evaluation failed, using fallback score 0", category: .superTest, level: .debug)
-        }
+        } catch {}
 
         return 0
     }

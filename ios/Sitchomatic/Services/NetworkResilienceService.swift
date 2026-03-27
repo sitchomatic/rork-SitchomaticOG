@@ -316,9 +316,7 @@ class NetworkResilienceService {
                 recordRegionLatency(region: region, latencyMs: latencyMs)
                 return latencyMs
             }
-        } catch {
-            logger.log("NetworkResilience: probe failed for region \(region): \(error.localizedDescription)", category: .network, level: .debug)
-        }
+        } catch {}
         return 9999
     }
 

@@ -989,10 +989,7 @@ class BPointWebSession: NSObject {
         let config = WKSnapshotConfiguration()
         config.rect = webView.bounds
         do { return try await webView.takeSnapshot(configuration: config) }
-        catch {
-            logger.log("BPointWebSession: screenshot capture failed: \(error.localizedDescription)", category: .screenshot, level: .warning)
-            return nil
-        }
+        catch { return nil }
     }
 
     func captureScreenshotWithCrop(cropRect: CGRect?) async -> (full: UIImage?, cropped: UIImage?) {

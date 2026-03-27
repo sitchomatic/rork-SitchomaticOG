@@ -763,11 +763,6 @@ class DNSPoolService {
 typealias PPSRDoHService = DNSPoolService
 
 nonisolated final class UnsafeSendableBox<T>: @unchecked Sendable {
-    private let lock = NSLock()
-    private var _value: T
-    var value: T {
-        get { lock.lock(); defer { lock.unlock() }; return _value }
-        set { lock.lock(); defer { lock.unlock() }; _value = newValue }
-    }
-    init(_ value: T) { _value = value }
+    var value: T
+    init(_ value: T) { self.value = value }
 }

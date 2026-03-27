@@ -430,7 +430,7 @@ class VPNTunnelManager {
                 }
             }
         } catch {
-            logger.log("VPNTunnel: stats message failed: \(error.localizedDescription)", category: .vpn, level: .debug)
+            // silently ignore - extension may not support stats message
         }
     }
 
