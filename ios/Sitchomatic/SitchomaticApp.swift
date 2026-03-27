@@ -83,6 +83,9 @@ struct SitchomaticApp: App {
     var body: some Scene {
         WindowGroup {
             ZStack {
+                // HyperFlow: Anchor headless WebViews to prevent iOS Jetsam background termination
+                HiddenWebViewAnchor()
+
                 if showingProfileSelect {
                     MainMenuView(
                         activeMode: Binding(
