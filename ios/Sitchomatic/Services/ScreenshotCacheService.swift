@@ -19,7 +19,8 @@ class ScreenshotCacheService {
     private var diskOnlyModeExpiry: Date = .distantPast
 
     init() {
-        let cachesDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+        let cachesDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
         cacheDirectory = cachesDir.appendingPathComponent("ScreenshotCache", isDirectory: true)
         try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
     }
@@ -177,7 +178,7 @@ class ScreenshotCacheService {
         let sizeMax = maxDiskCacheSizeBytes
         Task.detached(priority: .utility) {
             let fm = FileManager.default
-            let cachesDir = fm.urls(for: .cachesDirectory, in: .userDomainMask).first!
+            guard let cachesDir = fm.urls(for: .cachesDirectory, in: .userDomainMask).first else { return }
             let dir = cachesDir.appendingPathComponent("ScreenshotCache", isDirectory: true)
             guard let files = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey]) else { return }
 
@@ -230,7 +231,8 @@ class ScreenshotCacheService {
     private nonisolated func fileURL(for key: String) -> URL {
         let safeKey = key.replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: ":", with: "_")
-        let cachesDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+        let cachesDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
         return cachesDir.appendingPathComponent("ScreenshotCache", isDirectory: true).appendingPathComponent("\(safeKey).jpg")
     }
 }

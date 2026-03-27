@@ -45,6 +45,7 @@ nonisolated struct GreenBannerDetector: Sendable {
         let step = max(1, width / 200)
         let rowStep = max(1, height / 400)
         let samplesPerRow = (width + step - 1) / step
+        let pixelDataCount = pixelData.count
 
         var whiteRows: [Bool] = Array(repeating: false, count: height)
 
@@ -52,6 +53,7 @@ nonisolated struct GreenBannerDetector: Sendable {
             var whiteCount = 0
             for x in stride(from: 0, to: width, by: step) {
                 let offset = (y * width + x) * bytesPerPixel
+                guard offset + 2 < pixelDataCount else { continue }
                 let r = Double(pixelData[offset]) / 255.0
                 let g = Double(pixelData[offset + 1]) / 255.0
                 let b = Double(pixelData[offset + 2]) / 255.0

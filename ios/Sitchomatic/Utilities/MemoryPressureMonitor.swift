@@ -30,7 +30,6 @@ final class MemoryPressureMonitor {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            guard let self else { return }
             Task { @MainActor [weak self] in
                 self?.handleMemoryWarning(tier: .critical)
             }

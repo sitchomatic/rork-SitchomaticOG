@@ -34,6 +34,8 @@ nonisolated enum BlankScreenshotDetector: Sendable {
         guard totalPixels > 0 else { return true }
 
         var dominantCount = 0
+        let pixelDataCount = pixelData.count
+        guard pixelDataCount >= bytesPerPixel else { return true }
         let firstR = pixelData[0]
         let firstG = pixelData[1]
         let firstB = pixelData[2]
@@ -42,6 +44,7 @@ nonisolated enum BlankScreenshotDetector: Sendable {
 
         for i in 0..<totalPixels {
             let offset = i * bytesPerPixel
+            guard offset + 2 < pixelDataCount else { break }
             let r = pixelData[offset]
             let g = pixelData[offset + 1]
             let b = pixelData[offset + 2]

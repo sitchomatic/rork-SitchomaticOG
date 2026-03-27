@@ -2,12 +2,31 @@ import Foundation
 
 @MainActor
 enum TimeoutResolver {
+    private static var cachedSettings: AutomationSettings?
+    private static var cachedSettingsTimestamp: Date = .distantPast
+
     static var shared: AutomationSettings {
+        let now = Date()
+        if let cached = cachedSettings, now.timeIntervalSince(cachedSettingsTimestamp) < 5.0 {
+            return cached
+        }
+        let settings: AutomationSettings
         if let data = UserDefaults.standard.data(forKey: "automation_settings_v1"),
            let loaded = try? JSONDecoder().decode(AutomationSettings.self, from: data) {
-            return loaded.normalizedTimeouts()
+            settings = loaded.normalizedTimeouts()
+        } else {
+            settings = AutomationSettings().normalizedTimeouts()
         }
-        return AutomationSettings().normalizedTimeouts()
+        cachedSettings = settings
+        cachedSettingsTimestamp = now
+        return settings
+    }
+
+    /// Clears the cached automation settings. Call this when automation settings are
+    /// updated (e.g., saved to UserDefaults) to ensure the next access retrieves fresh data.
+    static func invalidateCache() {
+        cachedSettings = nil
+        cachedSettingsTimestamp = .distantPast
     }
 
     static var userTestTimeout: TimeInterval {

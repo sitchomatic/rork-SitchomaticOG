@@ -634,7 +634,7 @@ class DNSPoolService {
         let trimmedURL = url.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmedURL.hasPrefix("dot://") {
             let parts = trimmedURL.replacingOccurrences(of: "dot://", with: "").components(separatedBy: ":")
-            let host = parts[0]
+            guard let host = parts.first, !host.isEmpty else { return false }
             let port = parts.count > 1 ? UInt16(parts[1]) ?? 853 : 853
             return addServer(name: name, protocolType: .dot, endpoint: host, port: port, region: .global)
         }

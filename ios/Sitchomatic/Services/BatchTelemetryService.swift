@@ -237,7 +237,7 @@ class BatchTelemetryService {
                 id: UUID(),
                 batchId: batchId,
                 startedAt: Date(timeIntervalSince1970: startTs),
-                completedAt: completedTs != nil && completedTs! > 0 ? Date(timeIntervalSince1970: completedTs!) : nil,
+                completedAt: completedTs.flatMap { $0 > 0 ? Date(timeIntervalSince1970: $0) : nil },
                 totalItems: dict["totalItems"] as? Int ?? 0,
                 processedItems: dict["processedItems"] as? Int ?? 0,
                 successCount: dict["successCount"] as? Int ?? 0,

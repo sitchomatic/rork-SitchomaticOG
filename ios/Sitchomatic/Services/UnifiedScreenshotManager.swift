@@ -86,7 +86,7 @@ class UnifiedScreenshotManager {
             screenshots.removeLast(overflow)
         }
 
-        let crucialInfo = analysis?.crucialMatches.isEmpty == false ? " CRUCIAL:\(analysis!.crucialMatches.joined(separator: ","))" : ""
+        let crucialInfo = analysis.flatMap { $0.crucialMatches.isEmpty ? nil : " CRUCIAL:\($0.crucialMatches.joined(separator: ","))" } ?? ""
         logger.log("UnifiedScreenshots: captured \(step.rawValue) for \(credentialEmail) site=\(site) attempt=\(attemptNumber)\(crucialInfo)", category: .screenshot, level: crucialInfo.isEmpty ? .debug : .info)
     }
 

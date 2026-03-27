@@ -1,5 +1,8 @@
 import Foundation
 
+/// Pre-configured date formatters for consistent date/time formatting throughout the app.
+/// These formatters are created once as static lets and are never mutated after initialization.
+/// They are primarily designed for use from the main thread (SwiftUI views, @MainActor contexts).
 nonisolated enum DateFormatters: Sendable {
     static let timeWithMillis: DateFormatter = {
         let f = DateFormatter()

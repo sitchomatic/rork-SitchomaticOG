@@ -270,6 +270,10 @@ class UnifiedSessionViewModel {
     }
 
     func clearSessions() {
+        guard !isRunning else {
+            log("Cannot clear sessions while batch is running", level: .warning)
+            return
+        }
         sessions.removeAll()
         persistSessions()
         log("All sessions cleared", level: .info)
