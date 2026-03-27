@@ -1,6 +1,5 @@
 import Foundation
 
-@MainActor
 struct DebugClickJSFactory {
 
     struct ClickMethod {

@@ -1,7 +1,7 @@
 import Foundation
 import CoreXLSX
 
-struct XLSXParserService {
+nonisolated struct XLSXParserService: Sendable {
     static func parseToCSV(url: URL) -> String? {
         guard let file = XLSXFile(filepath: url.path) else { return nil }
 

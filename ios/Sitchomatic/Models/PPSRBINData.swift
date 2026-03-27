@@ -1,8 +1,6 @@
 import Foundation
-import Observation
 
-@Observable
-class PPSRBINData {
+struct PPSRBINData: Sendable {
     let bin: String
     var scheme: String
     var type: String

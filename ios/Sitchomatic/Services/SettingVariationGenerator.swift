@@ -1,6 +1,5 @@
 import Foundation
 
-@MainActor
 class SettingVariationGenerator {
     static let shared = SettingVariationGenerator()
 
