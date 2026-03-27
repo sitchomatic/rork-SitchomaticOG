@@ -40,6 +40,7 @@ nonisolated enum LoginTargetSite: String, CaseIterable, Sendable {
 class LoginSiteWebSession: NSObject {
     private(set) var webView: WKWebView?
     private let sessionId: UUID = UUID()
+    private var trackerSessionId: String { sessionId.uuidString.prefix(8).lowercased() + "-" + (targetURL.host ?? "unknown") }
     private var pageLoadContinuation: CheckedContinuation<Bool, Never>?
     private var isPageLoaded: Bool = false
     private var loadTimeoutTask: Task<Void, Never>?
@@ -102,6 +103,8 @@ class LoginSiteWebSession: NSObject {
             tearDown(wipeAll: false)
         }
 
+        processTerminated = false
+
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .nonPersistent()
         config.preferences.javaScriptCanOpenWindowsAutomatically = true
@@ -129,13 +132,13 @@ class LoginSiteWebSession: NSObject {
             webView.navigationDelegate = self
             webView.customUserAgent = profile.userAgent
             self.webView = webView
-            WebViewTracker.shared.incrementActive()
+            WebViewTracker.shared.incrementActive(sessionId: trackerSessionId)
         } else {
             let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 390, height: 844), configuration: config)
             webView.navigationDelegate = self
             webView.customUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
             self.webView = webView
-            WebViewTracker.shared.incrementActive()
+            WebViewTracker.shared.incrementActive(sessionId: trackerSessionId)
         }
     }
 
@@ -155,7 +158,7 @@ class LoginSiteWebSession: NSObject {
             wv.navigationDelegate = nil
         }
         if webView != nil {
-            WebViewTracker.shared.decrementActive()
+            WebViewTracker.shared.decrementActive(sessionId: trackerSessionId)
         }
         webView = nil
         isPageLoaded = false

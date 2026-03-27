@@ -16,9 +16,6 @@ final class AppStabilityCoordinator {
     private var subsystemHealthStatus: [String: Bool] = [:]
     private(set) var lastHealthReport: HealthReport?
     private var backgroundSaveTask: Task<Void, Never>?
-    private var foregroundObserver: Any?
-    private var backgroundObserver: Any?
-    private var terminateObserver: Any?
 
     nonisolated struct HealthReport: Sendable {
         let timestamp: Date
@@ -42,7 +39,6 @@ final class AppStabilityCoordinator {
         guard !isRunning else { return }
         isRunning = true
         startPeriodicHealthCheck()
-        registerLifecycleObservers()
         startPeriodicStatePersistence()
         logger.log("StabilityCoordinator: started", category: .system, level: .info)
     }
@@ -54,7 +50,6 @@ final class AppStabilityCoordinator {
         backgroundSaveTask?.cancel()
         backgroundSaveTask = nil
         cancelAllWatchdogs()
-        removeLifecycleObservers()
         logger.log("StabilityCoordinator: stopped", category: .system, level: .info)
     }
 
@@ -121,7 +116,11 @@ final class AppStabilityCoordinator {
         }
 
         if deathSpiral && (loginRunning || ppsrRunning) {
-            handleDeathSpiralDuringBatch()
+            logger.log("StabilityCoordinator: death spiral with active batch — persisting state before potential crash", category: .system, level: .critical)
+            PersistentFileStorageService.shared.forceSave()
+            LoginViewModel.shared.persistCredentialsNow()
+            PPSRAutomationViewModel.shared.persistCardsNow()
+            UnifiedSessionViewModel.shared.persistSessionsNow()
         }
 
         if consecutiveUnhealthyChecks >= 5 {
@@ -139,23 +138,19 @@ final class AppStabilityCoordinator {
     }
 
     private func handleWebViewLeak(count: Int) {
-        logger.log("StabilityCoordinator: WebView leak suspected — \(count) active with no batch running. Force resetting.", category: .system, level: .error)
+        let orphans = WebViewTracker.shared.detectOrphans(batchRunning: false)
+        if !orphans.isEmpty {
+            logger.log("StabilityCoordinator: WebView leak confirmed — \(orphans.count) orphaned sessions. Force resetting.", category: .system, level: .error)
+        } else {
+            logger.log("StabilityCoordinator: WebView leak suspected — \(count) active with no batch running. Force resetting.", category: .system, level: .error)
+        }
         WebViewTracker.shared.reset()
-    }
-
-    private func handleDeathSpiralDuringBatch() {
-        logger.log("StabilityCoordinator: death spiral with active batch — persisting state before potential crash", category: .system, level: .critical)
-        PersistentFileStorageService.shared.forceSave()
-        LoginViewModel.shared.persistCredentialsNow()
-        PPSRAutomationViewModel.shared.persistCardsNow()
     }
 
     private func handleProlongedDegradation() {
         logger.log("StabilityCoordinator: prolonged degradation (\(consecutiveUnhealthyChecks) checks) — forcing cleanup", category: .system, level: .critical)
 
         DebugLogger.shared.trimEntries(to: 1000)
-
-        NetworkResilienceService.shared.invalidateSharedSessions()
 
         AppAlertManager.shared.pushWarning(
             source: .system,
@@ -207,70 +202,19 @@ final class AppStabilityCoordinator {
         }
     }
 
-    private func registerLifecycleObservers() {
-        foregroundObserver = NotificationCenter.default.addObserver(
-            forName: UIApplication.willEnterForegroundNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in
-                self?.handleForegroundReturn()
-            }
-        }
-
-        backgroundObserver = NotificationCenter.default.addObserver(
-            forName: UIApplication.didEnterBackgroundNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in
-                self?.handleBackgroundEntry()
-            }
-        }
-
-        terminateObserver = NotificationCenter.default.addObserver(
-            forName: UIApplication.willTerminateNotification,
-            object: nil,
-            queue: .main
-        ) { _ in
-            Task { @MainActor in
-                PersistentFileStorageService.shared.forceSave()
-                LoginViewModel.shared.persistCredentialsNow()
-                PPSRAutomationViewModel.shared.persistCardsNow()
-                DebugLogger.shared.persistLatestLog()
-            }
-        }
-    }
-
-    private func removeLifecycleObservers() {
-        if let obs = foregroundObserver { NotificationCenter.default.removeObserver(obs) }
-        if let obs = backgroundObserver { NotificationCenter.default.removeObserver(obs) }
-        if let obs = terminateObserver { NotificationCenter.default.removeObserver(obs) }
-        foregroundObserver = nil
-        backgroundObserver = nil
-        terminateObserver = nil
-    }
-
-    private func handleForegroundReturn() {
+    func handleForegroundReturn() {
         logger.log("StabilityCoordinator: app returning to foreground — running health check", category: .system, level: .info)
         performHealthCheck()
 
         let webViewCount = WebViewTracker.shared.activeCount
-        let anyRunning = LoginViewModel.shared.isRunning || PPSRAutomationViewModel.shared.isRunning
+        let anyRunning = LoginViewModel.shared.isRunning || PPSRAutomationViewModel.shared.isRunning || UnifiedSessionViewModel.shared.isRunning
         if webViewCount > 0 && !anyRunning {
-            logger.log("StabilityCoordinator: orphaned WebViews after background — cleaning up", category: .system, level: .warning)
+            let orphans = WebViewTracker.shared.detectOrphans(batchRunning: false)
+            if !orphans.isEmpty {
+                logger.log("StabilityCoordinator: \(orphans.count) orphaned WebViews after background — cleaning up", category: .system, level: .warning)
+            }
             WebViewTracker.shared.reset()
         }
-    }
-
-    private func handleBackgroundEntry() {
-        logger.log("StabilityCoordinator: entering background — persisting all state", category: .system, level: .info)
-        PersistentFileStorageService.shared.forceSave()
-        LoginViewModel.shared.persistCredentialsNow()
-        PPSRAutomationViewModel.shared.persistCardsNow()
-        DebugLogger.shared.persistLatestLog()
-
-
     }
 
     func safeExecute<T: Sendable>(_ label: String, fallback: T, operation: @MainActor () async throws -> T) async -> T {

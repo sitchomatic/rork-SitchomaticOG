@@ -242,6 +242,23 @@ struct SitchomaticApp: App {
             }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
                 BackgroundTaskService.shared.handleAppWillEnterForeground()
+                AppStabilityCoordinator.shared.handleForegroundReturn()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.willTerminateNotification)) { _ in
+                if LoginViewModel.shared.isRunning {
+                    LoginViewModel.shared.emergencyStop()
+                }
+                if PPSRAutomationViewModel.shared.isRunning {
+                    PPSRAutomationViewModel.shared.emergencyStop()
+                }
+                if UnifiedSessionViewModel.shared.isRunning {
+                    UnifiedSessionViewModel.shared.emergencyStop()
+                }
+                PersistentFileStorageService.shared.forceSave()
+                DebugLogger.shared.persistLatestLog()
+                LoginViewModel.shared.persistCredentialsNow()
+                PPSRAutomationViewModel.shared.persistCardsNow()
+                UnifiedSessionViewModel.shared.persistSessionsNow()
             }
             .alert("Safe Boot Activated", isPresented: $showSafeBootAlert) {
                 Button("OK", role: .cancel) {}

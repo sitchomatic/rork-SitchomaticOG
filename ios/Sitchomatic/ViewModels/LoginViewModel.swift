@@ -94,6 +94,7 @@ class LoginViewModel {
     private var heartbeatTask: Task<Void, Never>?
     private var connectionTestTask: Task<Void, Never>?
     private var forceStopTask: Task<Void, Never>?
+    private var autoRetryTask: Task<Void, Never>?
     private var sessionHeartbeatTimeout: TimeInterval {
         TimeoutResolver.resolveHeartbeatTimeout(max(90, testTimeout))
     }
@@ -933,9 +934,10 @@ class LoginViewModel {
                 }
                 let backoffDelay = Double(autoRetryBackoffCounts.values.max() ?? 1) * 5.0
                 log("Auto-retry: \(retryCount) credential(s) scheduled for retry in \(Int(backoffDelay))s", level: .info)
-                Task {
+                autoRetryTask?.cancel()
+                autoRetryTask = Task {
                     try? await Task.sleep(for: .seconds(backoffDelay))
-                    guard !self.isRunning else { return }
+                    guard !Task.isCancelled, !self.isRunning else { return }
                     self.testSingleSiteBatch(retryCreds)
                 }
             }
@@ -974,6 +976,8 @@ class LoginViewModel {
     }
 
     func stopQueue() {
+        autoRetryTask?.cancel()
+        autoRetryTask = nil
         cancelPauseCountdown()
         isStopping = true
         isPaused = false
@@ -1036,11 +1040,15 @@ class LoginViewModel {
 
     func emergencyStop() {
         logger.log("LoginViewModel: EMERGENCY STOP triggered by crash protection", category: .system, level: .critical)
+        autoRetryTask?.cancel()
+        autoRetryTask = nil
         batchTask?.cancel()
         secondaryBatchTask?.cancel()
         batchTask = nil
         secondaryBatchTask = nil
         forceFinalizeBatch()
+        DeadSessionDetector.shared.stopAllWatchdogs()
+        SessionActivityMonitor.shared.stopAll()
         WebViewTracker.shared.reset()
     }
 
@@ -1206,6 +1214,9 @@ class LoginViewModel {
             }
             debugScreenshots.removeLast(debugScreenshots.count - keep)
             log("Memory pressure: flushed \(before - keep) screenshots to disk cache", level: .warning)
+        }
+        if globalLogs.count > 200 {
+            globalLogs = Array(globalLogs.prefix(200))
         }
     }
 

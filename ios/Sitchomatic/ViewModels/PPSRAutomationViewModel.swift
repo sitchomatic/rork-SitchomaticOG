@@ -660,6 +660,9 @@ class PPSRAutomationViewModel {
             debugScreenshots.removeLast(debugScreenshots.count - keep)
             log("Memory pressure: flushed \(before - keep) screenshots to disk cache", level: .warning)
         }
+        if globalLogs.count > 200 {
+            globalLogs = Array(globalLogs.prefix(200))
+        }
     }
 
     func correctResult(for screenshot: PPSRDebugScreenshot, override: UserResultOverride) {
@@ -740,6 +743,8 @@ class PPSRAutomationViewModel {
         batchTask?.cancel()
         batchTask = nil
         forceFinalizeBatch()
+        DeadSessionDetector.shared.stopAllWatchdogs()
+        SessionActivityMonitor.shared.stopAll()
         WebViewTracker.shared.reset()
     }
 

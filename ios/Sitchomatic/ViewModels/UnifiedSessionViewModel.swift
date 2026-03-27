@@ -227,7 +227,6 @@ class UnifiedSessionViewModel {
                         )
 
                         self.persistSessions()
-                        running = max(0, running - 1)
                     }
                 }
 
@@ -430,5 +429,15 @@ class UnifiedSessionViewModel {
         if globalLogs.count > 100 {
             globalLogs = Array(globalLogs.prefix(80))
         }
+    }
+
+    func emergencyStop() {
+        logger.log("UnifiedSessionViewModel: EMERGENCY STOP triggered", category: .system, level: .critical)
+        batchTask?.cancel()
+        batchTask = nil
+        finalizeBatch()
+        DeadSessionDetector.shared.stopAllWatchdogs()
+        SessionActivityMonitor.shared.stopAll()
+        WebViewTracker.shared.reset()
     }
 }

@@ -43,7 +43,6 @@ final class MemoryPressureMonitor {
                 self?.handleMemoryWarning(tier: .critical)
             }
         }
-        startProactivePolling()
     }
 
     func onMemoryWarning(_ handler: @escaping @MainActor () -> Void) {
@@ -83,74 +82,12 @@ final class MemoryPressureMonitor {
         }
     }
 
-    private func startProactivePolling() {
-        proactivePollingTask?.cancel()
-        proactivePollingTask = Task { [weak self] in
-            while !Task.isCancelled {
-                guard let self else { return }
-                let interval = self.computePollingInterval()
-                try? await Task.sleep(for: .seconds(interval))
-                guard !Task.isCancelled else { return }
-
-                let mb = CrashProtectionService.shared.currentMemoryUsageMB()
-
-                self.memoryTrend.append(mb)
-                if self.memoryTrend.count > self.trendWindowSize {
-                    self.memoryTrend.removeFirst(self.memoryTrend.count - self.trendWindowSize)
-                }
-
-                let tier = self.classifyMemoryTier(mb: mb)
-
-                if mb > self.severeThresholdMB {
-                    self.consecutiveHighMemory += 1
-                    self.handleMemoryWarning(tier: .severe)
-                } else if mb > self.criticalThresholdMB {
-                    self.consecutiveHighMemory += 1
-                    if self.consecutiveHighMemory >= 2 {
-                        self.handleMemoryWarning(tier: .critical)
-                    }
-                } else if mb > self.warningThresholdMB {
-                    self.consecutiveHighMemory += 1
-                    if self.consecutiveHighMemory >= 3 {
-                        self.handleMemoryWarning(tier: .warning)
-                        self.consecutiveHighMemory = 0
-                    }
-                } else {
-                    self.consecutiveHighMemory = 0
-                    self.lastTierTriggered = .normal
-                    self.tierEscalationCount = 0
-                }
-
-                if self.isMemoryTrendRising() && tier >= .warning {
-                    DebugLogger.shared.log("MemoryMonitor: rising trend detected (\(self.memoryTrend.first ?? 0)MB → \(mb)MB over \(self.memoryTrend.count) samples)", category: .system, level: .warning)
-                    if tier < .critical {
-                        self.handleMemoryWarning(tier: .warning)
-                    }
-                }
-            }
-        }
-    }
-
-    private func computePollingInterval() -> TimeInterval {
-        if consecutiveHighMemory > 3 { return 5 }
-        if consecutiveHighMemory > 0 { return 10 }
-        return 15
-    }
-
     private func classifyMemoryTier(mb: Int) -> MemoryTier {
         if mb > severeThresholdMB { return .severe }
         if mb > criticalThresholdMB { return .critical }
         if mb > warningThresholdMB { return .warning }
         if mb > warningThresholdMB / 2 { return .elevated }
         return .normal
-    }
-
-    private func isMemoryTrendRising() -> Bool {
-        guard memoryTrend.count >= 4 else { return false }
-        let recent = memoryTrend.suffix(4)
-        let pairs = zip(recent.dropLast(), recent.dropFirst())
-        let increasingCount = pairs.filter { $0 < $1 }.count
-        return increasingCount >= 3
     }
 
     var currentTier: MemoryTier {

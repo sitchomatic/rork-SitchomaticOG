@@ -14,6 +14,9 @@ class ScreenshotCacheService {
     private let logger = DebugLogger.shared
     private var batchScreenshotCount: Int = 0
     private let autoOffloadThreshold: Int = 30
+    private var recentStoreTimestamps: [Date] = []
+    private var diskOnlyMode: Bool = false
+    private var diskOnlyModeExpiry: Date = .distantPast
 
     init() {
         let cachesDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
@@ -22,15 +25,33 @@ class ScreenshotCacheService {
     }
 
     func store(_ image: UIImage, forKey key: String) {
-        let compressed = compressForMemory(image)
-        memoryCache[key] = compressed
-        accessOrder.removeAll { $0 == key }
-        accessOrder.append(key)
+        let now = Date()
         batchScreenshotCount += 1
-        evictMemoryCacheIfNeeded()
 
-        if batchScreenshotCount > autoOffloadThreshold && batchScreenshotCount % 10 == 0 {
-            aggressiveMemoryEvict()
+        recentStoreTimestamps.append(now)
+        recentStoreTimestamps = recentStoreTimestamps.filter { now.timeIntervalSince($0) < 1.0 }
+        if recentStoreTimestamps.count > 5 && !diskOnlyMode {
+            diskOnlyMode = true
+            diskOnlyModeExpiry = now.addingTimeInterval(5)
+            logger.log("ScreenshotCache: rate limit triggered (\(recentStoreTimestamps.count) in 1s) — disk-only mode for 5s", category: .screenshot, level: .warning)
+        }
+        if diskOnlyMode && now > diskOnlyModeExpiry {
+            diskOnlyMode = false
+        }
+
+        let skipMemoryCache = diskOnlyMode || CrashProtectionService.shared.isMemoryCritical
+
+        let compressed = compressForMemory(image)
+
+        if !skipMemoryCache {
+            memoryCache[key] = compressed
+            accessOrder.removeAll { $0 == key }
+            accessOrder.append(key)
+            evictMemoryCacheIfNeeded()
+
+            if batchScreenshotCount > autoOffloadThreshold && batchScreenshotCount % 10 == 0 {
+                aggressiveMemoryEvict()
+            }
         }
 
         let fileURL = fileURL(for: key)

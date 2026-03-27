@@ -56,7 +56,6 @@ final class CrashProtectionService {
         checkAndPerformSafeBootIfNeeded()
         recordLaunchTimestamp()
         startAdaptiveMemoryTrimming()
-        startContinuousLogFlush()
         let t = memoryMonitor.thresholds
         logger.log("CrashProtection: registered (soft=\(t.softMB)MB, high=\(t.highMB)MB, critical=\(t.criticalMB)MB, emergency=\(t.emergencyMB)MB, previousCrashes=\(crashCount))", category: .system, level: .info)
     }
@@ -107,6 +106,8 @@ final class CrashProtectionService {
 
     // MARK: - Memory Monitoring Loop
 
+    private var memoryCheckCount: Int = 0
+
     private func startAdaptiveMemoryTrimming() {
         memoryTrimTimer?.cancel()
         memoryTrimTimer = Task { [weak self] in
@@ -116,6 +117,11 @@ final class CrashProtectionService {
                 try? await Task.sleep(for: .seconds(interval))
                 guard !Task.isCancelled else { return }
                 self.performMemoryCheck()
+                self.memoryCheckCount += 1
+                if self.memoryCheckCount % 5 == 0 {
+                    DebugLogger.shared.persistLatestLog()
+                    self.persistPreCrashDiagnostics()
+                }
             }
         }
     }
@@ -237,26 +243,6 @@ final class CrashProtectionService {
             PPSRAutomationViewModel.shared.persistCardsNow()
         }
         return now
-    }
-
-    // MARK: - Continuous Log Flush
-
-    private func startContinuousLogFlush() {
-        continuousLogFlushTask?.cancel()
-        continuousLogFlushTask = Task { [weak self] in
-            while !Task.isCancelled {
-                let anyBatchRunning = LoginViewModel.shared.isRunning || PPSRAutomationViewModel.shared.isRunning
-                let interval: TimeInterval = anyBatchRunning ? 45 : 10
-                try? await Task.sleep(for: .seconds(interval))
-                guard !Task.isCancelled, let self else { return }
-                DebugLogger.shared.persistLatestLog()
-                self.persistPreCrashDiagnostics()
-                if anyBatchRunning && self.isMemoryCritical {
-                    LoginViewModel.shared.handleMemoryPressure()
-                    PPSRAutomationViewModel.shared.handleMemoryPressure()
-                }
-            }
-        }
     }
 
     private func persistPreCrashDiagnostics() {

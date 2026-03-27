@@ -27,23 +27,12 @@ class BlankPageRecoveryService {
         let start = Date()
         let target = TimeInterval(ms) / 1000.0
         while Date().timeIntervalSince(start) < target {
+            if Task.isCancelled { return }
             let remaining = target - Date().timeIntervalSince(start)
             let chunk = min(remaining, 0.5)
             guard chunk > 0 else { break }
-            do {
-                try await Task.sleep(for: .seconds(chunk))
-            } catch {
-                let elapsed = Date().timeIntervalSince(start)
-                if elapsed < target {
-                    let spinEnd = start.addingTimeInterval(target)
-                    while Date() < spinEnd {
-                        try? await Task.sleep(for: .milliseconds(50))
-                        if Date().timeIntervalSince(start) >= target { break }
-                        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
-                    }
-                }
-                return
-            }
+            try? await Task.sleep(for: .seconds(chunk))
+            if Task.isCancelled { return }
         }
     }
 
