@@ -45,7 +45,7 @@ class PersistentFileStorageService {
 
     private var isSaving: Bool = false
 
-    func saveFullState() {
+    @MainActor func saveFullState() {
         if let last = lastSaveDate, Date().timeIntervalSince(last) < minSaveInterval { return }
         guard !isSaving else { return }
         lastSaveDate = Date()
@@ -177,14 +177,14 @@ class PersistentFileStorageService {
         }
     }
 
-    func forceSave() {
+    @MainActor func forceSave() {
         lastSaveDate = nil
         saveFullState()
     }
 
     // MARK: - Full State Restore
 
-    func restoreIfNeeded() -> Bool {
+    @MainActor func restoreIfNeeded() -> Bool {
         let markerFile = stateURL.appendingPathComponent("restore_marker.json")
         let configFile = configURL.appendingPathComponent("full_config.json")
 
@@ -218,7 +218,7 @@ class PersistentFileStorageService {
         return restored
     }
 
-    private func restoreFromVault() -> Bool {
+    @MainActor private func restoreFromVault() -> Bool {
         let configFile = configURL.appendingPathComponent("full_config.json")
         guard let data = try? Data(contentsOf: configFile),
               let json = String(data: data, encoding: .utf8) else {
@@ -237,7 +237,7 @@ class PersistentFileStorageService {
 
     // MARK: - Config Snapshot (Comprehensive JSON)
 
-    private func saveConfigSnapshot() {
+    @MainActor private func saveConfigSnapshot() {
         let json = AppDataExportService.shared.exportJSON()
         let file = configURL.appendingPathComponent("full_config.json")
         try? json.data(using: .utf8)?.write(to: file)
@@ -250,7 +250,7 @@ class PersistentFileStorageService {
 
     // MARK: - Credentials
 
-    private func saveCredentials() {
+    @MainActor private func saveCredentials() {
         let creds = LoginPersistenceService.shared.loadCredentials()
         guard !creds.isEmpty else { return }
 
@@ -285,7 +285,7 @@ class PersistentFileStorageService {
 
     // MARK: - Cards
 
-    private func saveCards() {
+    @MainActor private func saveCards() {
         let cards = PPSRPersistenceService.shared.loadCards()
         guard !cards.isEmpty else { return }
 
@@ -309,7 +309,7 @@ class PersistentFileStorageService {
 
     // MARK: - Network
 
-    private func saveNetworkConfigs() {
+    @MainActor private func saveNetworkConfigs() {
         let proxyService = ProxyRotationService.shared
         let dnsService = PPSRDoHService.shared
         let urlService = LoginURLRotationService.shared
@@ -353,7 +353,7 @@ class PersistentFileStorageService {
 
     // MARK: - Debug Logs
 
-    private func saveDebugLogs() {
+    @MainActor private func saveDebugLogs() {
         let entries = DebugLogger.shared.entries
 
         let recentErrors = entries.filter { $0.level >= .error }.prefix(500)
@@ -378,7 +378,7 @@ class PersistentFileStorageService {
 
     // MARK: - Recorded Flows
 
-    private func saveRecordedFlows() {
+    @MainActor private func saveRecordedFlows() {
         let flows = FlowPersistenceService.shared.loadFlows()
         guard !flows.isEmpty else { return }
         if let data = try? JSONEncoder().encode(flows) {
@@ -443,7 +443,7 @@ class PersistentFileStorageService {
 
     // MARK: - Manual Backup
 
-    func createBackup() -> URL? {
+    @MainActor func createBackup() -> URL? {
         forceSave()
 
         let backupName = "backup_\(fileTimestamp).json"
@@ -458,7 +458,23 @@ class PersistentFileStorageService {
             return file
         } catch {
             let nsError = error as NSError
-            DebugLogger.logBackground("PersistentStorage: backup creation failed — [\(nsError.domain):\(nsError.code)] \(nsError.localizedDescription)", category: .persistence, level: .error)
+            var components: [String] = []
+            components.append("[\(nsError.domain):\(nsError.code)] \(nsError.localizedDescription)")
+
+            if let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? NSError {
+                components.append("Underlying: [\(underlying.domain):\(underlying.code)] \(underlying.localizedDescription)")
+            }
+
+            let metadataPairs = nsError.userInfo
+                .filter { $0.key != NSUnderlyingErrorKey }
+                .map { "\($0.key)=\($0.value)" }
+
+            if !metadataPairs.isEmpty {
+                components.append("metadata: \(metadataPairs.joined(separator: ", "))")
+            }
+
+            let message = "PersistentStorage: backup creation failed — " + components.joined(separator: " | ")
+            DebugLogger.logBackground(message, category: .persistence, level: .error)
             return nil
         }
     }
