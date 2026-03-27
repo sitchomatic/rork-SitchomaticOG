@@ -934,6 +934,217 @@ class LoginSiteWebSession: NSObject {
         return (isReady: result == "READY")
     }
 
+    // MARK: True Detection Convenience Methods
+
+    func clearPasswordFieldOnly() async {
+        let js = """
+        (function() {
+            var el = document.querySelector('input[type="password"]');
+            if (!el) return 'NOT_FOUND';
+            el.focus();
+            var ns = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+            if (ns && ns.set) { ns.set.call(el, ''); } else { el.value = ''; }
+            el.dispatchEvent(new Event('input', {bubbles: true}));
+            el.dispatchEvent(new Event('change', {bubbles: true}));
+            return 'CLEARED';
+        })();
+        """
+        _ = await executeJS(js)
+    }
+
+    func clearEmailFieldOnly() async {
+        let js = """
+        (function() {
+            var selectors = ['input[type="email"]', 'input#email', 'input[name="email"]', 'input[name="username"]', 'input[type="text"]:first-of-type'];
+            for (var i = 0; i < selectors.length; i++) {
+                var el = document.querySelector(selectors[i]);
+                if (el) {
+                    el.focus();
+                    var ns = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+                    if (ns && ns.set) { ns.set.call(el, ''); } else { el.value = ''; }
+                    el.dispatchEvent(new Event('input', {bubbles: true}));
+                    el.dispatchEvent(new Event('change', {bubbles: true}));
+                    return 'CLEARED';
+                }
+            }
+            return 'NOT_FOUND';
+        })();
+        """
+        _ = await executeJS(js)
+    }
+
+    func trueDetectionFillEmail(_ email: String) async -> (success: Bool, detail: String) {
+        let config = TrueDetectionService.TrueDetectionConfig()
+        let escaped = email.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "'", with: "\\'")
+        let js = """
+        (function() {
+            var el = document.querySelector('\(config.emailSelector)');
+            if (!el) {
+                var fallbacks = ['input[type="email"]', 'input[name="email"]', 'input[name="username"]', 'input[type="text"]:first-of-type'];
+                for (var i = 0; i < fallbacks.length; i++) { el = document.querySelector(fallbacks[i]); if (el) break; }
+            }
+            if (!el) return 'NOT_FOUND';
+            el.focus();
+            var ns = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+            if (ns && ns.set) { ns.set.call(el, ''); } else { el.value = ''; }
+            el.dispatchEvent(new Event('input', {bubbles: true}));
+            if (ns && ns.set) { ns.set.call(el, '\(escaped)'); } else { el.value = '\(escaped)'; }
+            el.dispatchEvent(new Event('input', {bubbles: true}));
+            el.dispatchEvent(new Event('change', {bubbles: true}));
+            el.dispatchEvent(new Event('blur', {bubbles: true}));
+            return el.value === '\(escaped)' ? 'OK' : 'VALUE_MISMATCH';
+        })();
+        """
+        let result = await executeJS(js)
+        if result == "OK" || result == "VALUE_MISMATCH" {
+            return (true, "TrueDetection email filled")
+        }
+        return (false, "TrueDetection email fill failed: \(result ?? "nil")")
+    }
+
+    func trueDetectionFillPassword(_ password: String) async -> (success: Bool, detail: String) {
+        let config = TrueDetectionService.TrueDetectionConfig()
+        let escaped = password.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "'", with: "\\'")
+        let js = """
+        (function() {
+            var el = document.querySelector('\(config.passwordSelector)');
+            if (!el) { el = document.querySelector('input[type="password"]'); }
+            if (!el) return 'NOT_FOUND';
+            el.focus();
+            var ns = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+            if (ns && ns.set) { ns.set.call(el, ''); } else { el.value = ''; }
+            el.dispatchEvent(new Event('input', {bubbles: true}));
+            if (ns && ns.set) { ns.set.call(el, '\(escaped)'); } else { el.value = '\(escaped)'; }
+            el.dispatchEvent(new Event('input', {bubbles: true}));
+            el.dispatchEvent(new Event('change', {bubbles: true}));
+            el.dispatchEvent(new Event('blur', {bubbles: true}));
+            return el.value === '\(escaped)' ? 'OK' : 'VALUE_MISMATCH';
+        })();
+        """
+        let result = await executeJS(js)
+        if result == "OK" || result == "VALUE_MISMATCH" {
+            return (true, "TrueDetection password filled")
+        }
+        return (false, "TrueDetection password fill failed: \(result ?? "nil")")
+    }
+
+    func trueDetectionTripleClickSubmit() async -> (success: Bool, detail: String) {
+        let config = TrueDetectionService.TrueDetectionConfig()
+        let escapedSelector = config.submitSelector
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "'", with: "\\'")
+        let js = """
+        (function() {
+            var btn = document.querySelector('\(escapedSelector)');
+            if (!btn) {
+                var fallbacks = ['button[type="submit"]', 'input[type="submit"]', 'button.login-button', '#loginButton'];
+                for (var i = 0; i < fallbacks.length; i++) { btn = document.querySelector(fallbacks[i]); if (btn) break; }
+            }
+            if (!btn) return 'NOT_FOUND';
+            for (var c = 0; c < 3; c++) {
+                btn.click();
+                btn.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true}));
+            }
+            return 'CLICKED';
+        })();
+        """
+        let result = await executeJS(js)
+        if result == "CLICKED" {
+            return (true, "TrueDetection triple-click submit fired")
+        }
+        return (false, "TrueDetection submit failed: \(result ?? "nil")")
+    }
+
+    func trueDetectionValidateSuccess() async -> (success: Bool, detail: String) {
+        let config = TrueDetectionService.TrueDetectionConfig()
+        let validated = await TrueDetectionService.shared.validateSuccess(
+            session: self,
+            config: config,
+            sessionId: monitoringSessionId ?? "unknown",
+            onLog: nil
+        )
+        if validated {
+            return (true, "TrueDetection success validated")
+        }
+        return (false, "TrueDetection: no success markers found")
+    }
+
+    func pressEnterOnPasswordField() async -> (success: Bool, detail: String) {
+        let js = """
+        (function() {
+            var el = document.querySelector('input[type="password"]');
+            if (!el) return 'NOT_FOUND';
+            el.focus();
+            el.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true}));
+            el.dispatchEvent(new KeyboardEvent('keypress', {key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true}));
+            el.dispatchEvent(new KeyboardEvent('keyup', {key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true}));
+            var form = el.closest('form');
+            if (form) { form.dispatchEvent(new Event('submit', {bubbles: true, cancelable: true})); }
+            return 'ENTER_PRESSED';
+        })();
+        """
+        let result = await executeJS(js)
+        if result == "ENTER_PRESSED" {
+            return (true, "Enter pressed on password field")
+        }
+        return (false, "Password field not found for Enter press: \(result ?? "nil")")
+    }
+
+    func fillForgotPasswordEmail(_ email: String) async -> (success: Bool, detail: String) {
+        let escaped = email.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "'", with: "\\'")
+        let js = """
+        (function() {
+            var selectors = ['input[type="email"]', 'input#email', 'input[name="email"]', 'input[name="username"]', 'input[type="text"]'];
+            var el = null;
+            for (var i = 0; i < selectors.length; i++) {
+                el = document.querySelector(selectors[i]);
+                if (el) break;
+            }
+            if (!el) return 'NOT_FOUND';
+            el.focus();
+            var ns = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+            if (ns && ns.set) { ns.set.call(el, ''); } else { el.value = ''; }
+            el.dispatchEvent(new Event('input', {bubbles: true}));
+            if (ns && ns.set) { ns.set.call(el, '\(escaped)'); } else { el.value = '\(escaped)'; }
+            el.dispatchEvent(new Event('input', {bubbles: true}));
+            el.dispatchEvent(new Event('change', {bubbles: true}));
+            el.dispatchEvent(new Event('blur', {bubbles: true}));
+            return el.value === '\(escaped)' ? 'OK' : 'VALUE_MISMATCH';
+        })();
+        """
+        let result = await executeJS(js)
+        if result == "OK" || result == "VALUE_MISMATCH" {
+            return (true, "Forgot password email filled")
+        }
+        return (false, "Forgot password email fill failed: \(result ?? "nil")")
+    }
+
+    func clickForgotPasswordSubmit() async -> (success: Bool, detail: String) {
+        let js = """
+        (function() {
+            var selectors = ['button[type="submit"]', 'input[type="submit"]', 'button.submit', '#submit', 'button:not([type])', 'a.submit'];
+            for (var i = 0; i < selectors.length; i++) {
+                var el = document.querySelector(selectors[i]);
+                if (el && !el.disabled) {
+                    el.click();
+                    return 'CLICKED';
+                }
+            }
+            var forms = document.querySelectorAll('form');
+            if (forms.length > 0) {
+                forms[0].dispatchEvent(new Event('submit', {bubbles: true, cancelable: true}));
+                return 'FORM_SUBMITTED';
+            }
+            return 'NOT_FOUND';
+        })();
+        """
+        let result = await executeJS(js)
+        if result == "CLICKED" || result == "FORM_SUBMITTED" {
+            return (true, "Forgot password submit: \(result ?? "")")
+        }
+        return (false, "Forgot password submit failed: \(result ?? "nil")")
+    }
+
     // MARK: Utilities
 
     func getViewportSize() -> CGSize {
@@ -1268,6 +1479,16 @@ class LoginWebSession: NSObject {
             ])
             return nil
         }
+    }
+
+    // MARK: Page Info
+
+    func getCurrentURL() async -> String {
+        await executeJS("window.location.href") ?? ""
+    }
+
+    func getPageTitle() async -> String {
+        await executeJS("document.title") ?? ""
     }
 
     // MARK: Page Content & Screenshots
@@ -2023,6 +2244,25 @@ class BPointWebSession: NSObject {
         } catch {
             return nil
         }
+    }
+
+    // MARK: Page Info
+
+    func getCurrentURL() async -> String {
+        await executeJS("window.location.href") ?? ""
+    }
+
+    func getPageTitle() async -> String {
+        await executeJS("document.title") ?? ""
+    }
+
+    func waitForNavigation(timeout: TimeInterval = 30) async -> Bool {
+        let start = Date()
+        while Date().timeIntervalSince(start) < timeout {
+            if isPageLoaded { return true }
+            try? await Task.sleep(for: .milliseconds(200))
+        }
+        return isPageLoaded
     }
 
     // MARK: Page Content & Screenshots
