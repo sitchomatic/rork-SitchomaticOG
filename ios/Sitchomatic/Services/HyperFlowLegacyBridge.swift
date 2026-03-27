@@ -455,6 +455,485 @@ class LoginSiteWebSession: NSObject {
         return false
     }
 
+    // MARK: Page Inspection
+
+    func getCurrentURL() async -> String {
+        await executeJS("window.location.href") ?? ""
+    }
+
+    func getPageTitle() async -> String {
+        await executeJS("document.title") ?? ""
+    }
+
+    func dismissCookieNotices() async {
+        let js = """
+        (function() {
+            var terms = ['accept','agree','got it','i understand','ok','close','dismiss','allow all','accept all','consent'];
+            var btns = document.querySelectorAll('button, a, [role="button"], input[type="button"], input[type="submit"]');
+            for (var i = 0; i < btns.length; i++) {
+                var txt = (btns[i].textContent || btns[i].value || '').replace(/[\\s]+/g,' ').toLowerCase().trim();
+                if (txt.length > 60) continue;
+                for (var t = 0; t < terms.length; t++) {
+                    if (txt.indexOf(terms[t]) !== -1) { btns[i].click(); return 'DISMISSED'; }
+                }
+            }
+            var overlays = document.querySelectorAll('[class*="cookie"], [class*="consent"], [class*="gdpr"], [id*="cookie"], [id*="consent"], [id*="gdpr"]');
+            for (var j = 0; j < overlays.length; j++) {
+                var closeBtn = overlays[j].querySelector('button, [role="button"], .close');
+                if (closeBtn) { closeBtn.click(); return 'DISMISSED_OVERLAY'; }
+            }
+            return 'NONE_FOUND';
+        })();
+        """
+        _ = await executeJS(js)
+    }
+
+    func verifyLoginFieldsExist() async -> (found: Int, missing: [String]) {
+        let js = """
+        (function() {
+            var missing = [];
+            var found = 0;
+            var emailSelectors = ['input[type="email"]','input[name="email"]','input[name="username"]','#email','#username','#loginEmail','input[autocomplete="email"]','input[autocomplete="username"]'];
+            var passSelectors = ['input[type="password"]','input[name="password"]','#password','#loginPassword','input[autocomplete="current-password"]'];
+            var emailFound = false;
+            for (var i = 0; i < emailSelectors.length; i++) {
+                if (document.querySelector(emailSelectors[i])) { emailFound = true; break; }
+            }
+            if (emailFound) { found++; } else { missing.push('email/username'); }
+            var passFound = false;
+            for (var j = 0; j < passSelectors.length; j++) {
+                if (document.querySelector(passSelectors[j])) { passFound = true; break; }
+            }
+            if (passFound) { found++; } else { missing.push('password'); }
+            return JSON.stringify({found: found, missing: missing});
+        })();
+        """
+        guard let raw = await executeJS(js),
+              let data = raw.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return (found: 0, missing: ["email/username", "password"])
+        }
+        let found = json["found"] as? Int ?? 0
+        let missing = json["missing"] as? [String] ?? []
+        return (found: found, missing: missing)
+    }
+
+    func waitForFullPageReadiness(host: String, sessionId: String, maxTimeoutMs: Int) async -> (ready: Bool, durationMs: Int, reason: String, jsSettled: Bool, formReady: Bool, buttonReady: Bool) {
+        let settlement = SmartPageSettlementService.shared
+        let result = await settlement.waitForSettlement(
+            executeJS: { [weak self] js in await self?.executeJS(js) },
+            host: host,
+            sessionId: sessionId,
+            maxTimeoutMs: maxTimeoutMs
+        )
+        return (
+            ready: result.settled,
+            durationMs: result.durationMs,
+            reason: result.reason,
+            jsSettled: result.signals.readyStateComplete && result.signals.domStable,
+            formReady: result.signals.loginFormReady,
+            buttonReady: result.signals.loginFormReady
+        )
+    }
+
+    func autoCalibrate() async -> LoginCalibrationService.URLCalibration? {
+        let js = """
+        (function() {
+            var emailSelectors = ['input[type="email"]','input[name="email"]','input[name="username"]','#email','#username','#loginEmail','input[autocomplete="email"]','input[autocomplete="username"]','input[type="text"]:first-of-type'];
+            var passSelectors = ['input[type="password"]','input[name="password"]','#password','#loginPassword','input[autocomplete="current-password"]'];
+            var btnSelectors = ['button[type="submit"]','input[type="submit"]','#login-submit','#loginButton','button.login-button'];
+            var loginTerms = ['log in','login','sign in','signin','submit'];
+            function bestSelector(el) {
+                if (el.id) return '#' + el.id;
+                if (el.name) return el.tagName.toLowerCase() + '[name="' + el.name + '"]';
+                if (el.type) return el.tagName.toLowerCase() + '[type="' + el.type + '"]';
+                return el.tagName.toLowerCase();
+            }
+            var emailEl = null; var emailCSS = null;
+            for (var i = 0; i < emailSelectors.length; i++) {
+                var e = document.querySelector(emailSelectors[i]);
+                if (e && !e.disabled) { emailEl = e; emailCSS = emailSelectors[i]; break; }
+            }
+            var passEl = null; var passCSS = null;
+            for (var j = 0; j < passSelectors.length; j++) {
+                var p = document.querySelector(passSelectors[j]);
+                if (p && !p.disabled) { passEl = p; passCSS = passSelectors[j]; break; }
+            }
+            var btnEl = null; var btnCSS = null;
+            for (var k = 0; k < btnSelectors.length; k++) {
+                var b = document.querySelector(btnSelectors[k]);
+                if (b && !b.disabled) { btnEl = b; btnCSS = btnSelectors[k]; break; }
+            }
+            if (!btnEl) {
+                var allBtns = document.querySelectorAll('button, input[type="submit"], [role="button"]');
+                for (var m = 0; m < allBtns.length; m++) {
+                    var txt = (allBtns[m].textContent || allBtns[m].value || '').replace(/[\\s]+/g,' ').toLowerCase().trim();
+                    if (txt.length > 50) continue;
+                    for (var t = 0; t < loginTerms.length; t++) {
+                        if (txt.indexOf(loginTerms[t]) !== -1) { btnEl = allBtns[m]; btnCSS = bestSelector(allBtns[m]); break; }
+                    }
+                    if (btnEl) break;
+                }
+            }
+            return JSON.stringify({
+                emailCSS: emailCSS, emailTag: emailEl ? emailEl.tagName : null,
+                emailType: emailEl ? (emailEl.type||'') : null, emailPlaceholder: emailEl ? (emailEl.placeholder||'') : null,
+                passCSS: passCSS, passTag: passEl ? passEl.tagName : null,
+                btnCSS: btnCSS, btnTag: btnEl ? btnEl.tagName : null, btnText: btnEl ? (btnEl.textContent||btnEl.value||'').trim() : null
+            });
+        })();
+        """
+        guard let raw = await executeJS(js),
+              let data = raw.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        let emailCSS = json["emailCSS"] as? String
+        let passCSS = json["passCSS"] as? String
+        let btnCSS = json["btnCSS"] as? String
+        guard emailCSS != nil || passCSS != nil || btnCSS != nil else { return nil }
+
+        let emailMapping: LoginCalibrationService.ElementMapping? = emailCSS.map {
+            LoginCalibrationService.ElementMapping(
+                cssSelector: $0,
+                tagName: json["emailTag"] as? String,
+                inputType: json["emailType"] as? String,
+                placeholder: json["emailPlaceholder"] as? String
+            )
+        }
+        let passMapping: LoginCalibrationService.ElementMapping? = passCSS.map {
+            LoginCalibrationService.ElementMapping(cssSelector: $0, tagName: json["passTag"] as? String, inputType: "password")
+        }
+        let btnMapping: LoginCalibrationService.ElementMapping? = btnCSS.map {
+            LoginCalibrationService.ElementMapping(cssSelector: $0, tagName: json["btnTag"] as? String, nearbyText: json["btnText"] as? String)
+        }
+        return LoginCalibrationService.URLCalibration(
+            urlPattern: targetURL.absoluteString,
+            emailField: emailMapping,
+            passwordField: passMapping,
+            loginButton: btnMapping
+        )
+    }
+
+    func executeHumanPattern(
+        _ pattern: LoginFormPattern,
+        username: String,
+        password: String,
+        sessionId: String
+    ) async -> (overallSuccess: Bool, usernameFilled: Bool, passwordFilled: Bool, submitTriggered: Bool, summary: String) {
+        let engine = HumanInteractionEngine.shared
+        let result = await engine.executePattern(
+            pattern,
+            username: username,
+            password: password,
+            executeJS: { [weak self] js in await self?.executeJS(js) },
+            sessionId: sessionId,
+            targetURL: targetURL.absoluteString
+        )
+        return (
+            overallSuccess: result.overallSuccess,
+            usernameFilled: result.usernameFilled,
+            passwordFilled: result.passwordFilled,
+            submitTriggered: result.submitTriggered,
+            summary: result.summary
+        )
+    }
+
+    func getFieldValues() async -> (email: String, password: String) {
+        let js = """
+        (function() {
+            var emailSelectors = ['input[type="email"]','input[name="email"]','input[name="username"]','#email','#username','#loginEmail','input[autocomplete="email"]','input[autocomplete="username"]','input[type="text"]:first-of-type'];
+            var passSelectors = ['input[type="password"]','input[name="password"]','#password','#loginPassword','input[autocomplete="current-password"]'];
+            var emailVal = '';
+            for (var i = 0; i < emailSelectors.length; i++) {
+                var e = document.querySelector(emailSelectors[i]);
+                if (e && e.value) { emailVal = e.value; break; }
+            }
+            var passVal = '';
+            for (var j = 0; j < passSelectors.length; j++) {
+                var p = document.querySelector(passSelectors[j]);
+                if (p && p.value) { passVal = p.value; break; }
+            }
+            return JSON.stringify({email: emailVal, password: passVal});
+        })();
+        """
+        guard let raw = await executeJS(js),
+              let data = raw.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return (email: "", password: "")
+        }
+        return (email: json["email"] as? String ?? "", password: json["password"] as? String ?? "")
+    }
+
+    func clearAllInputFields() async {
+        let js = """
+        (function() {
+            var inputs = document.querySelectorAll('input[type="text"], input[type="email"], input[type="password"], input[type="tel"], input[type="search"], input:not([type])');
+            var ns = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+            for (var i = 0; i < inputs.length; i++) {
+                inputs[i].focus();
+                if (ns && ns.set) { ns.set.call(inputs[i], ''); } else { inputs[i].value = ''; }
+                inputs[i].dispatchEvent(new Event('input', {bubbles: true}));
+                inputs[i].dispatchEvent(new Event('change', {bubbles: true}));
+            }
+            return 'CLEARED';
+        })();
+        """
+        _ = await executeJS(js)
+    }
+
+    func fillUsernameCalibrated(_ username: String, calibration: LoginCalibrationService.URLCalibration?) async -> (success: Bool, detail: String) {
+        if let selector = calibration?.emailField?.cssSelector, !selector.isEmpty {
+            let escaped = username.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "'", with: "\\'")
+            let js = """
+            (function() {
+                var el = document.querySelector('\(selector)');
+                if (!el) return 'NOT_FOUND';
+                el.focus();
+                var ns = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+                if (ns && ns.set) { ns.set.call(el, ''); } else { el.value = ''; }
+                el.dispatchEvent(new Event('input', {bubbles: true}));
+                if (ns && ns.set) { ns.set.call(el, '\(escaped)'); } else { el.value = '\(escaped)'; }
+                el.dispatchEvent(new Event('focus', {bubbles: true}));
+                el.dispatchEvent(new Event('input', {bubbles: true}));
+                el.dispatchEvent(new Event('change', {bubbles: true}));
+                el.dispatchEvent(new Event('blur', {bubbles: true}));
+                return el.value === '\(escaped)' ? 'OK' : 'VALUE_MISMATCH';
+            })();
+            """
+            let result = await executeJS(js)
+            return classifyFillResult(result, fieldName: "Username(calibrated:\(selector))")
+        }
+        return await fillUsername(username)
+    }
+
+    func fillPasswordCalibrated(_ password: String, calibration: LoginCalibrationService.URLCalibration?) async -> (success: Bool, detail: String) {
+        if let selector = calibration?.passwordField?.cssSelector, !selector.isEmpty {
+            let escaped = password.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "'", with: "\\'")
+            let js = """
+            (function() {
+                var el = document.querySelector('\(selector)');
+                if (!el) return 'NOT_FOUND';
+                el.focus();
+                var ns = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+                if (ns && ns.set) { ns.set.call(el, ''); } else { el.value = ''; }
+                el.dispatchEvent(new Event('input', {bubbles: true}));
+                if (ns && ns.set) { ns.set.call(el, '\(escaped)'); } else { el.value = '\(escaped)'; }
+                el.dispatchEvent(new Event('focus', {bubbles: true}));
+                el.dispatchEvent(new Event('input', {bubbles: true}));
+                el.dispatchEvent(new Event('change', {bubbles: true}));
+                el.dispatchEvent(new Event('blur', {bubbles: true}));
+                return el.value === '\(escaped)' ? 'OK' : 'VALUE_MISMATCH';
+            })();
+            """
+            let result = await executeJS(js)
+            return classifyFillResult(result, fieldName: "Password(calibrated:\(selector))")
+        }
+        return await fillPassword(password)
+    }
+
+    func captureButtonFingerprint(sessionId: String) async -> SmartButtonRecoveryService.ButtonFingerprint? {
+        await SmartButtonRecoveryService.shared.captureFingerprint(
+            executeJS: { [weak self] js in await self?.executeJS(js) },
+            sessionId: sessionId
+        )
+    }
+
+    func clickLoginButtonCalibrated(calibration: LoginCalibrationService.URLCalibration?) async -> (success: Bool, detail: String) {
+        if let selector = calibration?.loginButton?.cssSelector, !selector.isEmpty {
+            let js = """
+            (function() {
+                var el = document.querySelector('\(selector)');
+                if (el && !el.disabled) { el.click(); return 'CLICKED_CALIBRATED'; }
+                return 'NOT_FOUND';
+            })();
+            """
+            let result = await executeJS(js)
+            if result == "CLICKED_CALIBRATED" {
+                return (true, "Login button clicked via calibrated selector '\(selector)'")
+            }
+        }
+        return await clickLoginButtonInternal()
+    }
+
+    func ocrClickLoginButton() async -> (success: Bool, detail: String) {
+        guard let screenshot = await captureScreenshot(),
+              let cgImage = screenshot.cgImage else {
+            return (false, "OCR: could not capture screenshot")
+        }
+        let request = VNRecognizeTextRequest()
+        request.recognitionLevel = .accurate
+        request.usesLanguageCorrection = false
+        let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+        do {
+            try handler.perform([request])
+        } catch {
+            return (false, "OCR: Vision request failed — \(error.localizedDescription)")
+        }
+        guard let observations = request.results else {
+            return (false, "OCR: no text observations")
+        }
+        let loginTerms = ["log in", "login", "sign in", "signin", "submit"]
+        let imageSize = CGSize(width: cgImage.width, height: cgImage.height)
+        for obs in observations {
+            guard let candidate = obs.topCandidates(1).first else { continue }
+            let text = candidate.string.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+            for term in loginTerms {
+                if text.contains(term) {
+                    let box = obs.boundingBox
+                    let centerX = box.origin.x + box.width / 2
+                    let centerY = 1.0 - (box.origin.y + box.height / 2)
+                    let viewSize = webView?.frame.size ?? CGSize(width: 390, height: 844)
+                    let tapX = centerX * viewSize.width
+                    let tapY = centerY * viewSize.height
+                    let tapJS = """
+                    (function() {
+                        var el = document.elementFromPoint(\(tapX), \(tapY));
+                        if (el) { el.click(); return 'OCR_CLICKED:' + (el.textContent||'').trim().substring(0,30); }
+                        return 'OCR_NO_ELEMENT';
+                    })();
+                    """
+                    let tapResult = await executeJS(tapJS)
+                    if let tapResult, tapResult.hasPrefix("OCR_CLICKED") {
+                        return (true, "OCR clicked '\(text)' at (\(Int(tapX)),\(Int(tapY))): \(tapResult)")
+                    }
+                }
+            }
+        }
+        return (false, "OCR: no login button text found in \(observations.count) observations")
+    }
+
+    func rapidWelcomePoll(timeout: TimeInterval, originalURL: String) async -> (welcomeTextFound: Bool, redirectedToHomepage: Bool, navigationDetected: Bool, errorBannerDetected: Bool, smsNotificationDetected: Bool, finalPageContent: String, finalURL: String) {
+        let start = Date()
+        var welcomeTextFound = false
+        var redirectedToHomepage = false
+        var navigationDetected = false
+        var errorBannerDetected = false
+        var smsNotificationDetected = false
+        var finalPageContent = ""
+        var finalURL = ""
+
+        let pollJS = """
+        (function() {
+            var body = (document.body ? document.body.innerText : '').substring(0, 3000).toLowerCase();
+            var url = window.location.href;
+            var welcomeTerms = ['welcome','dashboard','my account','home','logged in','success','hello'];
+            var errorTerms = ['invalid','incorrect','wrong password','failed','error','try again','denied','expired'];
+            var smsTerms = ['verification code','sms','two-factor','2fa','mfa','one-time','otp','authenticator'];
+            var hasWelcome = false;
+            for (var i = 0; i < welcomeTerms.length; i++) { if (body.indexOf(welcomeTerms[i]) !== -1) { hasWelcome = true; break; } }
+            var hasError = false;
+            for (var j = 0; j < errorTerms.length; j++) { if (body.indexOf(errorTerms[j]) !== -1) { hasError = true; break; } }
+            var hasSMS = false;
+            for (var k = 0; k < smsTerms.length; k++) { if (body.indexOf(smsTerms[k]) !== -1) { hasSMS = true; break; } }
+            return JSON.stringify({welcome: hasWelcome, error: hasError, sms: hasSMS, url: url, content: body.substring(0, 1500)});
+        })();
+        """
+
+        while Date().timeIntervalSince(start) < timeout {
+            guard let raw = await executeJS(pollJS),
+                  let data = raw.data(using: .utf8),
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                try? await Task.sleep(for: .milliseconds(250))
+                continue
+            }
+            let currentURL = json["url"] as? String ?? ""
+            finalURL = currentURL
+            finalPageContent = json["content"] as? String ?? ""
+            welcomeTextFound = json["welcome"] as? Bool ?? false
+            errorBannerDetected = json["error"] as? Bool ?? false
+            smsNotificationDetected = json["sms"] as? Bool ?? false
+            navigationDetected = !currentURL.isEmpty && currentURL != originalURL
+            if let origHost = URL(string: originalURL)?.host,
+               let curHost = URL(string: currentURL)?.host,
+               curHost == origHost {
+                let origPath = URL(string: originalURL)?.path ?? ""
+                let curPath = URL(string: currentURL)?.path ?? ""
+                redirectedToHomepage = curPath != origPath && (curPath == "/" || curPath.contains("home") || curPath.contains("dashboard") || curPath.contains("account"))
+            }
+            if welcomeTextFound || redirectedToHomepage || navigationDetected || errorBannerDetected || smsNotificationDetected {
+                break
+            }
+            try? await Task.sleep(for: .milliseconds(200))
+        }
+        return (welcomeTextFound: welcomeTextFound, redirectedToHomepage: redirectedToHomepage, navigationDetected: navigationDetected, errorBannerDetected: errorBannerDetected, smsNotificationDetected: smsNotificationDetected, finalPageContent: finalPageContent, finalURL: finalURL)
+    }
+
+    func captureScreenshotFast() async -> UIImage? {
+        guard let webView, webView.bounds.width > 0, webView.bounds.height > 0 else { return nil }
+        let config = WKSnapshotConfiguration()
+        config.snapshotWidth = NSNumber(value: Int(webView.bounds.width))
+        return try? await webView.takeSnapshot(configuration: config)
+    }
+
+    func injectSettlementMonitor() async {
+        await SmartPageSettlementService.shared.injectMonitor(
+            executeJS: { [weak self] js in await self?.executeJS(js) }
+        )
+    }
+
+    func waitForButtonReadyForNextAttempt(
+        originalFingerprint: SmartButtonRecoveryService.ButtonFingerprint?,
+        host: String,
+        sessionId: String,
+        maxTimeoutMs: Int
+    ) async -> (ready: Bool, durationMs: Int, reason: String, recoveredFromFingerprint: Bool) {
+        if let fingerprint = originalFingerprint {
+            let result = await SmartButtonRecoveryService.shared.waitForRecovery(
+                originalFingerprint: fingerprint,
+                executeJS: { [weak self] js in await self?.executeJS(js) },
+                host: host,
+                sessionId: sessionId,
+                maxTimeoutMs: maxTimeoutMs
+            )
+            return (ready: result.recovered, durationMs: result.durationMs, reason: result.reason, recoveredFromFingerprint: true)
+        }
+        let start = Date()
+        let timeoutSec = Double(maxTimeoutMs) / 1000.0
+        while Date().timeIntervalSince(start) < timeoutSec {
+            let readiness = await checkLoginButtonReadiness()
+            if readiness.isReady {
+                let ms = Int(Date().timeIntervalSince(start) * 1000)
+                return (ready: true, durationMs: ms, reason: "Button clickable (no fingerprint)", recoveredFromFingerprint: false)
+            }
+            try? await Task.sleep(for: .milliseconds(300))
+        }
+        let ms = Int(Date().timeIntervalSince(start) * 1000)
+        return (ready: false, durationMs: ms, reason: "Timeout waiting for button readiness", recoveredFromFingerprint: false)
+    }
+
+    func checkLoginButtonReadiness() async -> (isReady: Bool) {
+        let js = """
+        (function() {
+            var selectors = ['button[type="submit"]','input[type="submit"]','#login-submit','#loginButton','button.login-button'];
+            var loginTerms = ['log in','login','sign in','signin','submit'];
+            var btn = null;
+            for (var i = 0; i < selectors.length; i++) {
+                var el = document.querySelector(selectors[i]);
+                if (el) { btn = el; break; }
+            }
+            if (!btn) {
+                var allBtns = document.querySelectorAll('button, [role="button"]');
+                for (var j = 0; j < allBtns.length; j++) {
+                    var txt = (allBtns[j].textContent||allBtns[j].value||'').replace(/[\\s]+/g,' ').toLowerCase().trim();
+                    for (var t = 0; t < loginTerms.length; t++) {
+                        if (txt.indexOf(loginTerms[t]) !== -1) { btn = allBtns[j]; break; }
+                    }
+                    if (btn) break;
+                }
+            }
+            if (!btn) return 'NO_BUTTON';
+            var style = window.getComputedStyle(btn);
+            if (btn.disabled) return 'DISABLED';
+            if (style.pointerEvents === 'none') return 'POINTER_NONE';
+            if (parseFloat(style.opacity) < 0.5) return 'LOW_OPACITY';
+            return 'READY';
+        })();
+        """
+        let result = await executeJS(js)
+        return (isReady: result == "READY")
+    }
+
     // MARK: Utilities
 
     func getViewportSize() -> CGSize {
