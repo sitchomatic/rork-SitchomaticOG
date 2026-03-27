@@ -1,12 +1,10 @@
 import Foundation
 import UIKit
 
-@MainActor
 class PersistentFileStorageService {
     static let shared = PersistentFileStorageService()
 
     private let rootFolder = "AppVault"
-    private let logger = DebugLogger.shared
     private let fileManager = FileManager.default
 
     private var rootURL: URL {
@@ -53,7 +51,7 @@ class PersistentFileStorageService {
         lastSaveDate = Date()
         isSaving = true
 
-        logger.log("PersistentStorage: starting full state save", category: .persistence, level: .info)
+        DebugLogger.logBackground("PersistentStorage: starting full state save", category: .persistence, level: .info)
 
         let configJSON = AppDataExportService.shared.exportJSON()
         let creds = LoginPersistenceService.shared.loadCredentials()
@@ -191,7 +189,7 @@ class PersistentFileStorageService {
         let configFile = configURL.appendingPathComponent("full_config.json")
 
         guard fileManager.fileExists(atPath: configFile.path) else {
-            logger.log("PersistentStorage: no saved state found — fresh install", category: .persistence, level: .info)
+            DebugLogger.logBackground("PersistentStorage: no saved state found — fresh install", category: .persistence, level: .info)
             return false
         }
 
@@ -203,12 +201,12 @@ class PersistentFileStorageService {
                let data = try? Data(contentsOf: markerFile),
                let marker = try? JSONDecoder().decode(RestoreMarker.self, from: data),
                marker.appVersion == currentAppVersion {
-                logger.log("PersistentStorage: current version data exists — skipping restore", category: .persistence, level: .info)
+                DebugLogger.logBackground("PersistentStorage: current version data exists — skipping restore", category: .persistence, level: .info)
                 return false
             }
         }
 
-        logger.log("PersistentStorage: restoring saved state from vault", category: .persistence, level: .info)
+        DebugLogger.logBackground("PersistentStorage: restoring saved state from vault", category: .persistence, level: .info)
 
         let restored = restoreFromVault()
 
@@ -224,12 +222,12 @@ class PersistentFileStorageService {
         let configFile = configURL.appendingPathComponent("full_config.json")
         guard let data = try? Data(contentsOf: configFile),
               let json = String(data: data, encoding: .utf8) else {
-            logger.log("PersistentStorage: failed to read config file", category: .persistence, level: .error)
+            DebugLogger.logBackground("PersistentStorage: failed to read config file", category: .persistence, level: .error)
             return false
         }
 
         let result = AppDataExportService.shared.importJSON(json)
-        logger.log("PersistentStorage: restore complete — \(result.summary)", category: .persistence, level: .success)
+        DebugLogger.logBackground("PersistentStorage: restore complete — \(result.summary)", category: .persistence, level: .success)
 
         restoreAppState()
         restoreDebugLogs()
@@ -356,8 +354,7 @@ class PersistentFileStorageService {
     // MARK: - Debug Logs
 
     private func saveDebugLogs() {
-        let logger = DebugLogger.shared
-        let entries = logger.entries
+        let entries = DebugLogger.shared.entries
 
         let recentErrors = entries.filter { $0.level >= .error }.prefix(500)
         let errorLines = recentErrors.map { "[\($0.level.rawValue)] [\($0.category.rawValue)] \(DateFormatters.fullTimestamp.string(from: $0.timestamp)) \($0.message)" }
@@ -369,14 +366,14 @@ class PersistentFileStorageService {
         let allFile = debugURL.appendingPathComponent("full_log.log")
         try? allLines.joined(separator: "\n").data(using: .utf8)?.write(to: allFile)
 
-        let diagnosticReport = logger.exportDiagnosticReport()
+        let diagnosticReport = DebugLogger.shared.exportDiagnosticReport()
         let diagFile = debugURL.appendingPathComponent("diagnostic_\(fileTimestamp).log")
         try? diagnosticReport.data(using: .utf8)?.write(to: diagFile)
         pruneOldFiles(in: debugURL, prefix: "diagnostic_", keepCount: 10)
     }
 
     private func restoreDebugLogs() {
-        logger.log("PersistentStorage: debug logs restored from vault", category: .persistence, level: .info)
+        DebugLogger.logBackground("PersistentStorage: debug logs restored from vault", category: .persistence, level: .info)
     }
 
     // MARK: - Recorded Flows
@@ -457,10 +454,11 @@ class PersistentFileStorageService {
         do {
             try data.write(to: file)
             pruneOldFiles(in: backupsURL, prefix: "backup_", keepCount: 10)
-            logger.log("PersistentStorage: manual backup created — \(backupName)", category: .persistence, level: .success)
+            DebugLogger.logBackground("PersistentStorage: manual backup created — \(backupName)", category: .persistence, level: .success)
             return file
         } catch {
-            logger.logError("PersistentStorage: backup creation failed", error: error, category: .persistence)
+            let nsError = error as NSError
+            DebugLogger.logBackground("PersistentStorage: backup creation failed — [\(nsError.domain):\(nsError.code)] \(nsError.localizedDescription)", category: .persistence, level: .error)
             return nil
         }
     }

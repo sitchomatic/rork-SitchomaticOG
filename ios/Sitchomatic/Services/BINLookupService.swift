@@ -46,7 +46,7 @@ actor BINLookupService {
         }
 
         let task = Task<PPSRBINData, Never> {
-            let data = await MainActor.run { PPSRBINData(bin: prefix) }
+            var data = PPSRBINData(bin: prefix)
 
             let config = URLSessionConfiguration.ephemeral
             config.timeoutIntervalForRequest = 8
@@ -69,15 +69,16 @@ actor BINLookupService {
 
                     let decoded = try JSONDecoder().decode(BINAPIResponse.self, from: responseData)
 
-                    await MainActor.run {
-                        data.scheme = decoded.card?.scheme ?? ""
-                        data.type = decoded.card?.type ?? ""
-                        data.category = decoded.card?.category ?? ""
-                        data.issuer = decoded.issuer?.name ?? ""
-                        data.country = decoded.country?.name ?? ""
-                        data.countryCode = decoded.country?.alpha_2_code ?? ""
-                        data.isLoaded = true
-                    }
+                    data = PPSRBINData(
+                        bin: prefix,
+                        scheme: decoded.card?.scheme ?? "",
+                        type: decoded.card?.type ?? "",
+                        category: decoded.card?.category ?? "",
+                        issuer: decoded.issuer?.name ?? "",
+                        country: decoded.country?.name ?? "",
+                        countryCode: decoded.country?.alpha_2_code ?? "",
+                        isLoaded: true
+                    )
 
                     return data
                 } catch {

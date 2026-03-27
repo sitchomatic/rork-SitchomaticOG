@@ -44,7 +44,7 @@ nonisolated enum LoginFormPattern: String, CaseIterable, Codable, Sendable {
     }
 }
 
-struct HumanPatternResult {
+nonisolated struct HumanPatternResult: Sendable {
     let pattern: LoginFormPattern
     var usernameFilled: Bool = false
     var passwordFilled: Bool = false
