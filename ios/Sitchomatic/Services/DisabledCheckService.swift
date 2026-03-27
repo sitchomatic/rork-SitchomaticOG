@@ -145,7 +145,7 @@ class DisabledCheckService {
             let pollTimeout: TimeInterval = TimeoutResolver.resolveAutomationTimeout(8)
             while Date().timeIntervalSince(pollStart) < pollTimeout {
                 try? await Task.sleep(for: .milliseconds(Int.random(in: 400...800)))
-                pageContent = await session.getPageContent()
+                pageContent = await session.getPageContent() ?? ""
                 let contentLower = pageContent.lowercased()
                 let disabledPhrases = [
                     "has been disabled"

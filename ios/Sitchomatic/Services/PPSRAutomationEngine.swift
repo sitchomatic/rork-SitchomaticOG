@@ -420,7 +420,7 @@ class PPSRAutomationEngine {
             }
         }
 
-        var pageContent = await session.getPageContent()
+        var pageContent = await session.getPageContent() ?? ""
         var contentLower = pageContent.lowercased()
         var currentURL = await session.getCurrentURL()
 
@@ -441,7 +441,7 @@ class PPSRAutomationEngine {
             for pollIdx in 1...5 {
                 await speedDelay(seconds: 2)
                 let pollURL = await session.getCurrentURL()
-                let pollContent = await session.getPageContent()
+                let pollContent = await session.getPageContent() ?? ""
                 let pollLower = pollContent.lowercased()
                 let pollURLChanged = pollURL != preSubmitURL
 
@@ -467,7 +467,7 @@ class PPSRAutomationEngine {
                     check.logs.append(PPSRLogEntry(message: "Retry: page did not navigate", level: .warning))
                 }
                 await speedDelay(seconds: 2)
-                pageContent = await session.getPageContent()
+                pageContent = await session.getPageContent() ?? ""
                 contentLower = pageContent.lowercased()
                 currentURL = await session.getCurrentURL()
                 let retryURLChanged = currentURL != preSubmitURL

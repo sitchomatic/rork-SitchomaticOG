@@ -422,7 +422,7 @@ class TrueDetectionService {
         sessionId: String,
         onLog: ((String, PPSRLogEntry.Level) -> Void)?
     ) async -> Bool {
-        let pageContent = await session.getPageContent()
+        let pageContent = await session.getPageContent() ?? ""
         let contentLower = pageContent.lowercased()
 
         for marker in config.successMarkers {
@@ -455,7 +455,7 @@ class TrueDetectionService {
         sessionId: String,
         onLog: ((String, PPSRLogEntry.Level) -> Void)?
     ) async -> TerminalError? {
-        let pageContent = await session.getPageContent()
+        let pageContent = await session.getPageContent() ?? ""
         let contentLower = pageContent.lowercased()
 
         if contentLower.contains("temporarily disabled") {

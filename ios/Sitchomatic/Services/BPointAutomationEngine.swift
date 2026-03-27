@@ -357,7 +357,7 @@ class BPointAutomationEngine {
             check.logs.append(PPSRLogEntry(message: "REDIRECT: \(preSubmitURL) → \(postSubmitURL)", level: .info))
         }
 
-        var pageContent = await session.getPageContent()
+        var pageContent = await session.getPageContent() ?? ""
         var contentLower = pageContent.lowercased()
         let currentURL = await session.getCurrentURL()
 
@@ -367,7 +367,7 @@ class BPointAutomationEngine {
             check.logs.append(PPSRLogEntry(message: "Initial eval uncertain — polling for result (up to 10s)...", level: .warning))
             for pollIdx in 1...5 {
                 await speedDelay(seconds: 2)
-                let pollContent = await session.getPageContent()
+                let pollContent = await session.getPageContent() ?? ""
                 let pollLower = pollContent.lowercased()
                 let pollURL = await session.getCurrentURL()
                 let pollURLChanged = pollURL != preSubmitURL

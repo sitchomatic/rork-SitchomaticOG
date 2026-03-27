@@ -476,7 +476,7 @@ class DualFindViewModel {
             var outcome = await evaluateResponseWithTimeout(session: session, timeout: 10)
 
             if outcome == .unsure {
-                let pageContent = await session.getPageContent()
+                let pageContent = await session.getPageContent() ?? ""
                 let currentURL = await session.getCurrentURL()
                 let host = URL(string: currentURL)?.host ?? currentURL
 
@@ -502,7 +502,7 @@ class DualFindViewModel {
                 log("[\(label)] \(email) — UNSURE result, freezing session for user intervention", level: .warning)
                 updateSession(id: sessionInfoId, email: email, status: "UNSURE ⚠️", active: true)
 
-                let pageContent = await session.getPageContent()
+                let pageContent = await session.getPageContent() ?? ""
                 let currentURL = await session.getCurrentURL()
 
                 let request = DualFindInterventionRequest(
@@ -713,7 +713,7 @@ class DualFindViewModel {
     }
 
     private func evaluateResponse(session: LoginSiteWebSession) async -> DualFindTestOutcome {
-        let pageContent = await session.getPageContent()
+        let pageContent = await session.getPageContent() ?? ""
         let contentLower = pageContent.lowercased()
         let currentURL = await session.getCurrentURL()
         let urlLower = currentURL.lowercased()

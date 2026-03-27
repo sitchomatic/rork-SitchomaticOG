@@ -603,7 +603,7 @@ class LoginAutomationEngine {
         attempt.logs.append(PPSRLogEntry(message: "Cookie/consent notices dismissed", level: .info))
         logger.log("Cookie notices dismissed", category: .webView, level: .trace, sessionId: sessionId, durationMs: cookieMs)
 
-        let preLoginContent = await session.getPageContent()
+        let preLoginContent = await session.getPageContent() ?? ""
         logger.log("Pre-login content captured (\(preLoginContent.count) chars)", category: .webView, level: .trace, sessionId: sessionId)
 
         logger.startTimer(key: "\(sessionId)_fieldverify")
@@ -882,7 +882,7 @@ class LoginAutomationEngine {
 
             var pageContent = pollResult.finalPageContent
             if pageContent.isEmpty {
-                pageContent = await session.getPageContent()
+                pageContent = await session.getPageContent() ?? ""
             }
             var currentURL = pollResult.finalURL
             if currentURL.isEmpty {

@@ -46,7 +46,7 @@ class ChallengePageClassifier {
         var signals: [String] = []
         var scores: [ChallengeType: Double] = [:]
 
-        let pageContent = await session.getPageContent()
+        let pageContent = await session.getPageContent() ?? ""
         let contentLower = pageContent.lowercased()
         let currentURL = await session.getCurrentURL()
         let httpStatus = session.lastHTTPStatusCode
