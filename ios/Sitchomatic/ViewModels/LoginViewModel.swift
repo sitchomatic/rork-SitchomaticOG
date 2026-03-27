@@ -97,6 +97,7 @@ class LoginViewModel: MemoryPressurePersistable {
     private var autoRetryTask: Task<Void, Never>?
 
     deinit {
+        pauseCountdownTask?.cancel()
         batchTask?.cancel()
         secondaryBatchTask?.cancel()
         settingsSaveTask?.cancel()
@@ -105,6 +106,7 @@ class LoginViewModel: MemoryPressurePersistable {
         connectionTestTask?.cancel()
         forceStopTask?.cancel()
         autoRetryTask?.cancel()
+        logFlushTask?.cancel()
     }
 
     private var sessionHeartbeatTimeout: TimeInterval {
