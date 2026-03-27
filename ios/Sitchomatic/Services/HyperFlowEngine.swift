@@ -221,7 +221,7 @@ public final class HeadlessWebViewWorker: NSObject, WKNavigationDelegate, WKScri
     private var webView: WKWebView?
     private let workerID = UUID()
     private let role: WorkerRole
-    private let allowedDomains: Set<String>
+    private nonisolated let allowedDomains: Set<String>
     private var navigationContinuation: CheckedContinuation<Bool, Never>?
     private var streamedData: Data?
     private let logger = Logger(subsystem: "com.hyperflow.scraper", category: "Worker")
