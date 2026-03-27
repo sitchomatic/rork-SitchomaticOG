@@ -201,7 +201,7 @@ class ConfidenceResultEngine {
         case "tempdisabled": return .tempDisabled
         case "noacc": return .noAcc
         case "unsure": return .unsure
-        default: return .noAcc
+        default: return .unsure
         }
     }
 

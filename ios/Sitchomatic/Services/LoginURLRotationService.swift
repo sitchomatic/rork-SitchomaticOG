@@ -10,6 +10,14 @@ class LoginURLRotationService {
         didSet { persistState() }
     }
 
+    var useMirrors: Bool = false {
+        didSet {
+            UserDefaults.standard.set(useMirrors, forKey: "login_url_use_mirrors")
+            reloadMirrorURLs()
+            persistState()
+        }
+    }
+
     private(set) var joeURLs: [RotatingURL] = []
     private(set) var ignitionURLs: [RotatingURL] = []
     private var joeIndex: Int = 0
@@ -17,6 +25,22 @@ class LoginURLRotationService {
 
     private let persistKey = "login_url_rotation_state_v1"
     private let aiURLOptimizer = AILoginURLOptimizerService.shared
+
+    // MARK: - Mirror URLs (requires Nord VPN)
+
+    static let mirrorJoeURLStrings: [String] = [
+        "https://joefortunepokies.eu/login",
+        "https://joefortune.ooo/login",
+    ]
+
+    static let mirrorIgnitionURLStrings: [String] = [
+        "https://ignitionpoker.eu/poker/tournaments?overlay=login",
+        "https://ignitioncasino.buzz/poker/tournaments?overlay=login",
+    ]
+
+    private static let allMirrorURLStrings: Set<String> = {
+        Set(mirrorJoeURLStrings + mirrorIgnitionURLStrings)
+    }()
 
     static let directDNSSafeJoeDomains: Set<String> = [
         "joefortunepokies.win",
@@ -81,6 +105,10 @@ class LoginURLRotationService {
         joeURLs = Self.defaultJoeURLStrings.map { RotatingURL(urlString: $0, isEnabled: true, lastFailure: nil, failCount: 0) }
         ignitionURLs = Self.defaultIgnitionURLStrings.map { RotatingURL(urlString: $0, isEnabled: true, lastFailure: nil, failCount: 0) }
         dontAutoDisableURLsForDirectDNS = UserDefaults.standard.bool(forKey: "dont_auto_disable_urls_direct_dns")
+        useMirrors = UserDefaults.standard.bool(forKey: "login_url_use_mirrors")
+        if useMirrors {
+            appendMirrorURLs()
+        }
         loadState()
     }
 
@@ -286,6 +314,7 @@ class LoginURLRotationService {
             ignitionURLs[idx].successCount += 1
             ignitionURLs[idx].totalAttempts += 1
         }
+        persistState()
     }
 
     func reportResponseTime(urlString: String, duration: TimeInterval) {
@@ -297,6 +326,7 @@ class LoginURLRotationService {
             ignitionURLs[idx].totalResponseTime += duration
             ignitionURLs[idx].responseCount += 1
         }
+        persistState()
     }
 
     func resetPerformanceStats() {
@@ -313,6 +343,36 @@ class LoginURLRotationService {
             ignitionURLs[i].totalAttempts = 0
         }
         persistState()
+    }
+
+    // MARK: - Mirror URL Management
+
+    func isMirrorURL(_ urlString: String) -> Bool {
+        Self.allMirrorURLStrings.contains(urlString)
+    }
+
+    private func appendMirrorURLs() {
+        let existingJoe = Set(joeURLs.map(\.urlString))
+        for urlStr in Self.mirrorJoeURLStrings where !existingJoe.contains(urlStr) {
+            joeURLs.append(RotatingURL(urlString: urlStr, isEnabled: true, lastFailure: nil, failCount: 0))
+        }
+        let existingIgn = Set(ignitionURLs.map(\.urlString))
+        for urlStr in Self.mirrorIgnitionURLStrings where !existingIgn.contains(urlStr) {
+            ignitionURLs.append(RotatingURL(urlString: urlStr, isEnabled: true, lastFailure: nil, failCount: 0))
+        }
+    }
+
+    private func removeMirrorURLs() {
+        joeURLs.removeAll { Self.allMirrorURLStrings.contains($0.urlString) }
+        ignitionURLs.removeAll { Self.allMirrorURLStrings.contains($0.urlString) }
+    }
+
+    private func reloadMirrorURLs() {
+        if useMirrors {
+            appendMirrorURLs()
+        } else {
+            removeMirrorURLs()
+        }
     }
 
     func toggleURL(id: UUID, enabled: Bool) {

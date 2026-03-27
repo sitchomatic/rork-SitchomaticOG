@@ -1935,6 +1935,16 @@ struct AutomationSettingsView: View {
                 }
             }
             .tint(.purple)
+            Toggle(isOn: Binding(
+                get: { vm.urlRotation.useMirrors },
+                set: { vm.urlRotation.useMirrors = $0 }
+            )) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Use mirrors too (requires Nord)")
+                    Text("Adds geo-restricted mirror URLs to rotation").font(.caption2).foregroundStyle(.secondary)
+                }
+            }
+            .tint(.cyan)
         } header: {
             Label("URL Rotation", systemImage: "arrow.triangle.2.circlepath")
         }

@@ -36,6 +36,8 @@ public enum HyperFlowTaskFactory {
         "ignitioncasino.ooo",
         "ignitioncasino.lv",
         "ignitioncasino.eu.com",
+        "ignitioncasino.buzz",
+        "ignitionpoker.eu",
         "ignition231.com",
         "ignition165.com",
         "ignition551.com",
