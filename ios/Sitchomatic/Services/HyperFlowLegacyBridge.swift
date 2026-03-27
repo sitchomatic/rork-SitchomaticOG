@@ -962,7 +962,7 @@ class LoginSiteWebSession: NSObject {
     func checkLoginButtonReadiness() async -> Bool {
         let js = """
         (function() {
-            var selectors = ['button[type="submit"]','input[type="submit"]','#login-submit','#loginButton','button.login-button'];
+            var  = ['button[type="submit"]','input[type="submit"]','#login-submit','#loginButton','button.login-button'];
             var loginTerms = ['log in','login','sign in','signin','submit'];
             var btn = null;
             for (var i = 0; i < selectors.length; i++) {
@@ -1027,6 +1027,153 @@ class LoginSiteWebSession: NSObject {
                 continuation.resume()
             }
         }
+    }
+
+    func clearPasswordFieldOnly() async {
+        let js = """
+        (function() {
+            var el = document.querySelector('input[type="password"]');
+            if (!el) return 'NOT_FOUND';
+            var ns = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+            if (ns && ns.set) { ns.set.call(el, ''); } else { el.value = ''; }
+            el.dispatchEvent(new Event('input', {bubbles: true}));
+            el.dispatchEvent(new Event('change', {bubbles: true}));
+            return 'CLEARED';
+        })();
+        """
+        _ = await executeJS(js)
+    }
+
+    func clearEmailFieldOnly() async {
+        let js = """
+        (function() {
+            var selectors = ['input[type="email"]','input[type="text"]','input[name*="email" i]','input[name*="user" i]','input[id*="email" i]','input[id*="user" i]'];
+            var el = null;
+            for (var i = 0; i < selectors.length; i++) { el = document.querySelector(selectors[i]); if (el) break; }
+            if (!el) return 'NOT_FOUND';
+            var ns = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+            if (ns && ns.set) { ns.set.call(el, ''); } else { el.value = ''; }
+            el.dispatchEvent(new Event('input', {bubbles: true}));
+            el.dispatchEvent(new Event('change', {bubbles: true}));
+            return 'CLEARED';
+        })();
+        """
+        _ = await executeJS(js)
+    }
+
+    func trueDetectionFillPassword(_ password: String) async -> (success: Bool, detail: String) {
+        let escaped = password.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "'", with: "\\'")
+        let js = """
+        (function() {
+            var el = document.querySelector('input[type="password"]');
+            if (!el) return 'NOT_FOUND';
+            el.focus();
+            var ns = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+            if (ns && ns.set) { ns.set.call(el, '\(escaped)'); } else { el.value = '\(escaped)'; }
+            el.dispatchEvent(new Event('focus', {bubbles: true}));
+            el.dispatchEvent(new Event('input', {bubbles: true}));
+            el.dispatchEvent(new Event('change', {bubbles: true}));
+            el.dispatchEvent(new Event('blur', {bubbles: true}));
+            return el.value === '\(escaped)' ? 'OK' : 'VALUE_MISMATCH';
+        })();
+        """
+        let result = await executeJS(js)
+        return classifyFillResult(result, fieldName: "Password(trueDetection)")
+    }
+
+    func trueDetectionFillEmail(_ email: String) async -> (success: Bool, detail: String) {
+        let escaped = email.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "'", with: "\\'")
+        let js = """
+        (function() {
+            var selectors = ['input[type="email"]','input[type="text"]','input[name*="email" i]','input[name*="user" i]','input[id*="email" i]','input[id*="user" i]'];
+            var el = null;
+            for (var i = 0; i < selectors.length; i++) { el = document.querySelector(selectors[i]); if (el) break; }
+            if (!el) return 'NOT_FOUND';
+            el.focus();
+            var ns = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+            if (ns && ns.set) { ns.set.call(el, '\(escaped)'); } else { el.value = '\(escaped)'; }
+            el.dispatchEvent(new Event('focus', {bubbles: true}));
+            el.dispatchEvent(new Event('input', {bubbles: true}));
+            el.dispatchEvent(new Event('change', {bubbles: true}));
+            el.dispatchEvent(new Event('blur', {bubbles: true}));
+            return el.value === '\(escaped)' ? 'OK' : 'VALUE_MISMATCH';
+        })();
+        """
+        let result = await executeJS(js)
+        return classifyFillResult(result, fieldName: "Email(trueDetection)")
+    }
+
+    func trueDetectionTripleClickSubmit() async -> (success: Bool, detail: String) {
+        let js = """
+        (function() {
+            var selectors = ['button[type="submit"]','input[type="submit"]','#login-submit','#loginButton','button.login-button'];
+            var loginTerms = ['log in','login','sign in','signin','submit'];
+            var btn = null;
+            for (var i = 0; i < selectors.length; i++) { var el = document.querySelector(selectors[i]); if (el) { btn = el; break; } }
+            if (!btn) {
+                var allBtns = document.querySelectorAll('button, [role="button"]');
+                for (var j = 0; j < allBtns.length; j++) {
+                    var txt = (allBtns[j].textContent||allBtns[j].value||'').replace(/[\\s]+/g,' ').toLowerCase().trim();
+                    for (var t = 0; t < loginTerms.length; t++) { if (txt.indexOf(loginTerms[t]) !== -1) { btn = allBtns[j]; break; } }
+                    if (btn) break;
+                }
+            }
+            if (!btn) return 'NOT_FOUND';
+            btn.click(); btn.click(); btn.click();
+            return 'TRIPLE_CLICKED';
+        })();
+        """
+        let result = await executeJS(js)
+        if result == "TRIPLE_CLICKED" {
+            return (true, "Login button triple-clicked via trueDetection")
+        }
+        return (false, "trueDetection submit failed: \(result ?? "nil")")
+    }
+
+    func pressEnterOnPasswordField() async -> (success: Bool, detail: String) {
+        let js = """
+        (function() {
+            var el = document.querySelector('input[type="password"]');
+            if (!el) return 'NOT_FOUND';
+            el.focus();
+            var ev = new KeyboardEvent('keydown', {key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true});
+            el.dispatchEvent(ev);
+            var ev2 = new KeyboardEvent('keypress', {key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true});
+            el.dispatchEvent(ev2);
+            var ev3 = new KeyboardEvent('keyup', {key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true});
+            el.dispatchEvent(ev3);
+            var form = el.closest('form');
+            if (form) { form.dispatchEvent(new Event('submit', {bubbles: true, cancelable: true})); }
+            return 'ENTER_PRESSED';
+        })();
+        """
+        let result = await executeJS(js)
+        if result == "ENTER_PRESSED" {
+            return (true, "Enter pressed on password field")
+        }
+        return (false, "pressEnter failed: \(result ?? "nil")")
+    }
+
+    func trueDetectionValidateSuccess() async -> (success: Bool, detail: String) {
+        let js = """
+        (function() {
+            var body = (document.body ? document.body.innerText : '').toLowerCase();
+            var url = window.location.href.toLowerCase();
+            var successMarkers = ['balance','wallet','my account','logout','dashboard','deposit','welcome'];
+            for (var i = 0; i < successMarkers.length; i++) {
+                if (body.indexOf(successMarkers[i]) !== -1) return 'SUCCESS:' + successMarkers[i];
+            }
+            if (url.indexOf('/login') === -1 && url.indexOf('/signin') === -1 && url.indexOf('error') === -1) {
+                if (body.indexOf('balance') !== -1 || body.indexOf('wallet') !== -1) return 'SUCCESS:url+content';
+            }
+            return 'NO_SUCCESS_MARKERS';
+        })();
+        """
+        let result = await executeJS(js)
+        if let result, result.hasPrefix("SUCCESS:") {
+            return (true, "trueDetection validated success: \(result)")
+        }
+        return (false, "trueDetection validation: \(result ?? "nil")")
     }
 }
 

@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import SwiftUI
 import UIKit
+import WebKit
 
 nonisolated struct BatchResult: Sendable {
     let working: Int
@@ -409,39 +410,35 @@ class PPSRAutomationViewModel {
             return
         }
 
-        let pageTitle = await session.getPageTitle()
+        let pageTitle = session.webView?.title ?? "(unknown)"
         log("Page loaded: \(pageTitle)")
 
-        let structure = await session.dumpPageStructure()
+        let structure = await session.dumpPageStructure() ?? "(empty)"
         lastDiagnostics = structure
         log("DOM structure captured (\(structure.count) chars)")
 
-        let verification = await session.verifyFieldsExist()
-        if verification.found == 6 {
+        let fieldsVerified = await session.verifyFieldsExist()
+        if fieldsVerified {
             connectionStatus = .connected
             consecutiveConnectionFailures = 0
             autoHealAttempted = false
-            log("Connected — all 6 form fields verified on live PPSR page", level: .success)
-        } else if verification.found > 0 {
-            connectionStatus = .connected
-            consecutiveConnectionFailures = 0
-            log("Connected — found \(verification.found)/6 fields. Missing: \(verification.missing.joined(separator: ", "))", level: .warning)
+            log("Connected — form fields verified on live PPSR page", level: .success)
         } else {
             connectionStatus = .connected
-            log("Connected to page but 0/6 fields found — page may use dynamic rendering", level: .warning)
+            log("Connected to page but VIN field not found — page may use dynamic rendering", level: .warning)
 
-            let iframes = await session.checkForIframes()
-            if iframes > 0 {
-                log("Detected \(iframes) iframe(s) on page — fields may be inside iframe", level: .warning)
+            let hasIframes = await session.checkForIframes()
+            if hasIframes {
+                log("Detected iframe(s) on page — fields may be inside iframe", level: .warning)
             }
 
             log("Waiting 3s for dynamic JS to render...")
             try? await Task.sleep(for: .seconds(3))
-            let retryVerification = await session.verifyFieldsExist()
-            if retryVerification.found > 0 {
-                log("After wait: found \(retryVerification.found)/6 fields", level: .success)
+            let retryVerified = await session.verifyFieldsExist()
+            if retryVerified {
+                log("After wait: form fields found", level: .success)
             } else {
-                log("Still 0 fields after wait — check page structure in diagnostics", level: .error)
+                log("Still no fields after wait — check page structure in diagnostics", level: .error)
             }
         }
     }

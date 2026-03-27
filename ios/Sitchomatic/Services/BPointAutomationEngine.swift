@@ -242,7 +242,7 @@ class BPointAutomationEngine {
             await speedDelay(seconds: 2)
 
             let remainingForNav = max(5, deadline.timeIntervalSinceNow - 5)
-            let navigated = await session.waitForNavigation(timeout: min(TimeoutResolver.resolveAutomationTimeout(15), remainingForNav))
+            let navigated = await waitForBPointNavigation(session: session, timeout: min(TimeoutResolver.resolveAutomationTimeout(15), remainingForNav))
             if navigated {
                 check.logs.append(PPSRLogEntry(message: "Navigated to payment page after brand selection", level: .success))
             } else {
@@ -252,10 +252,10 @@ class BPointAutomationEngine {
             guard !isTimedOut(deadline) else { return .timeout }
             await speedDelay(seconds: 2)
 
-            let hasEmailField = await session.detectEmailFieldOnPaymentPage()
-            if hasEmailField {
+            let emailDetected = await session.detectEmailFieldOnPaymentPage()
+            if emailDetected {
                 check.logs.append(PPSRLogEntry(message: "Email field detected on payment page — blacklisting \(billerCode)", level: .warning))
-                blacklistBiller(billerCode, reason: "Email field required")
+                blacklistBiller(billerCode, reason: "Email field required on payment page")
                 continue
             }
 
@@ -343,15 +343,15 @@ class BPointAutomationEngine {
             return .connectionFailure
         }
 
-        let preSubmitURL = await session.getCurrentURL()
+        let preSubmitURL = session.webView?.url?.absoluteString ?? ""
         let remainingForPostNav = max(5, deadline.timeIntervalSinceNow - 3)
-        let postNavigated = await session.waitForNavigation(timeout: min(TimeoutResolver.resolveAutomationTimeout(15), remainingForPostNav))
+        let postNavigated = await waitForBPointNavigation(session: session, timeout: min(TimeoutResolver.resolveAutomationTimeout(15), remainingForPostNav))
         if !postNavigated {
             check.logs.append(PPSRLogEntry(message: "Page did not navigate after submit — checking content", level: .warning))
         }
         await speedDelay(seconds: 2)
 
-        let postSubmitURL = await session.getCurrentURL()
+        let postSubmitURL = session.webView?.url?.absoluteString ?? ""
         let urlChanged = postSubmitURL != preSubmitURL
         if urlChanged {
             check.logs.append(PPSRLogEntry(message: "REDIRECT: \(preSubmitURL) → \(postSubmitURL)", level: .info))
@@ -359,7 +359,7 @@ class BPointAutomationEngine {
 
         var pageContent = await session.getPageContent() ?? ""
         var contentLower = pageContent.lowercased()
-        let currentURL = await session.getCurrentURL()
+        let currentURL = session.webView?.url?.absoluteString ?? ""
 
         var evaluation = evaluateBPointResponse(contentLower: contentLower, pageContent: pageContent, currentURL: currentURL, urlChanged: urlChanged)
 
@@ -369,7 +369,7 @@ class BPointAutomationEngine {
                 await speedDelay(seconds: 2)
                 let pollContent = await session.getPageContent() ?? ""
                 let pollLower = pollContent.lowercased()
-                let pollURL = await session.getCurrentURL()
+                let pollURL = session.webView?.url?.absoluteString ?? ""
                 let pollURLChanged = pollURL != preSubmitURL
 
                 let pollEval = evaluateBPointResponse(contentLower: pollLower, pageContent: pollContent, currentURL: pollURL, urlChanged: pollURLChanged)
@@ -397,7 +397,7 @@ class BPointAutomationEngine {
         advanceTo(.confirmingReport, check: check, message: "Evaluating BPoint response...")
         check.logs.append(PPSRLogEntry(
             message: "Evaluation: \(evaluation.outcome) (score: \(evaluation.score)) — \(evaluation.reason)",
-            level: evaluation.outcome == .pass ? .success : evaluation.outcome == .uncertain ? .warning : .error
+            level: { switch evaluation.outcome { case .pass: return PPSRLogEntry.Level.success; case .uncertain: return .warning; default: return .error } }()
         ))
 
         switch evaluation.outcome {
@@ -577,6 +577,16 @@ class BPointAutomationEngine {
         )
         check.screenshotIds.append(screenshot.id)
         onScreenshot?(screenshot)
+    }
+
+    private func waitForBPointNavigation(session: BPointWebSession, timeout: TimeInterval) async -> Bool {
+        let start = Date()
+        while Date().timeIntervalSince(start) < timeout {
+            try? await Task.sleep(for: .milliseconds(200))
+            let currentURL = session.webView?.url?.absoluteString ?? ""
+            if !currentURL.isEmpty { return true }
+        }
+        return false
     }
 
     private func performDoHPreflight(check: PPSRCheck, sessionId: String) async {

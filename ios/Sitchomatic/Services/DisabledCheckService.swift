@@ -103,7 +103,7 @@ class DisabledCheckService {
             await session.dismissCookieNotices()
             try? await Task.sleep(for: .milliseconds(Int.random(in: 300...700)))
 
-            let fillResult = await session.fillForgotPasswordEmail(email)
+            let fillResult = await session.fillUsername(email)
             guard fillResult.success else {
                 session.tearDown(wipeAll: true)
                 if attempt < 3 {
@@ -119,7 +119,7 @@ class DisabledCheckService {
 
             var submitSucceeded = false
             for submitAttempt in 1...4 {
-                let submitResult = await session.clickForgotPasswordSubmit()
+                let submitResult = await session.clickLoginButtonCalibrated(calibration: nil)
                 if submitResult.success {
                     submitSucceeded = true
                     addLog("Submit \(submitResult.detail) for \(email) on try \(submitAttempt)")
