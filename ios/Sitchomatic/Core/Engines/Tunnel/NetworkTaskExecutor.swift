@@ -9,6 +9,11 @@ import Foundation
 /// `NetworkTaskExecutor` isolates network-critical work onto its own concurrent
 /// dispatch queue at `.userInteractive` QoS, preventing packet drops.
 ///
+/// Thread-safety: This class is `@unchecked Sendable` because the only stored
+/// property (`queue`) is an immutable `let` reference to a `DispatchQueue`,
+/// which is itself fully thread-safe for concurrent dispatch operations.
+/// No mutable state exists in this class.
+///
 /// Usage with Swift 6.2 Task executor affinity:
 /// ```swift
 /// Task(executorPreference: NetworkTaskExecutor.shared) {
@@ -35,18 +40,17 @@ public final class NetworkTaskExecutor: @unchecked Sendable {
         queue.async(execute: work)
     }
 
-    /// Executes async work on the network fast lane and returns the result.
-    /// Bridges structured concurrency to the dedicated dispatch queue.
-    public func run<T: Sendable>(_ work: @escaping @Sendable () async throws -> T) async rethrows -> T {
+    /// Executes synchronous work on the network fast lane and returns the result.
+    /// Bridges structured concurrency to the dedicated dispatch queue by suspending
+    /// the caller and resuming on the high-priority queue.
+    public func run<T: Sendable>(_ work: @escaping @Sendable () throws -> T) async rethrows -> T {
         return try await withCheckedThrowingContinuation { continuation in
             queue.async {
-                Task {
-                    do {
-                        let result = try await work()
-                        continuation.resume(returning: result)
-                    } catch {
-                        continuation.resume(throwing: error)
-                    }
+                do {
+                    let result = try work()
+                    continuation.resume(returning: result)
+                } catch {
+                    continuation.resume(throwing: error)
                 }
             }
         }

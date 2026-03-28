@@ -136,10 +136,9 @@ public actor TelemetryBufferActor {
     /// Emits snapshots at the specified interval with backpressure support.
     public func metricsStream(interval: Duration = .seconds(1)) -> AsyncStream<MetricsSnapshot> {
         AsyncStream { continuation in
-            let task = Task { [weak self] in
+            let task = Task {
                 while !Task.isCancelled {
                     try? await Task.sleep(for: interval)
-                    guard let self else { break }
                     let snap = await self.snapshot()
                     continuation.yield(snap)
                 }

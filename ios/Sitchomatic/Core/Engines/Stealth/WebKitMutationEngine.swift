@@ -246,11 +246,20 @@ public final class WebKitMutationEngine: Sendable {
 
     // MARK: - User-Agent Generation
 
+    // MARK: - User-Agent Constants
+
+    /// Centralized version constants for user-agent generation.
+    /// Update these when new iOS/Safari versions are released.
+    private enum UserAgentVersions {
+        static let safariWebKit = ["605.1.15", "604.1.34", "605.1.33"]
+        static let iosVersions = ["17_4_1", "17_3_1", "17_2", "16_7_5", "17_5"]
+        static let safariBrowserVersion = "17.4"
+        static let mobileBuild = "15E148"
+    }
+
     private func generateMobileUserAgent(profile: StealthIdentityActor.IdentityProfile) -> String {
-        let safariVersions = ["605.1.15", "604.1.34", "605.1.33"]
-        let iosVersions = ["17_4_1", "17_3_1", "17_2", "16_7_5", "17_5"]
-        let safariVersion = safariVersions.randomElement() ?? "605.1.15"
-        let iosVersion = iosVersions.randomElement() ?? "17_4_1"
-        return "Mozilla/5.0 (iPhone; CPU iPhone OS \(iosVersion) like Mac OS X) AppleWebKit/\(safariVersion) (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/\(safariVersion)"
+        let safariVersion = UserAgentVersions.safariWebKit.randomElement() ?? "605.1.15"
+        let iosVersion = UserAgentVersions.iosVersions.randomElement() ?? "17_4_1"
+        return "Mozilla/5.0 (iPhone; CPU iPhone OS \(iosVersion) like Mac OS X) AppleWebKit/\(safariVersion) (KHTML, like Gecko) Version/\(UserAgentVersions.safariBrowserVersion) Mobile/\(UserAgentVersions.mobileBuild) Safari/\(safariVersion)"
     }
 }

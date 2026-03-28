@@ -163,7 +163,7 @@ public final class CoreHyperFlowEngine {
         )
         activeSessions[sessionId] = session
 
-        // Record telemetry
+        // Record telemetry (fire-and-forget via OSAllocatedUnfairLock — ordering not guaranteed)
         TelemetryBufferActor.shared.increment(.webViewSpawns)
 
         defer {
