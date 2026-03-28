@@ -148,6 +148,7 @@ class DualSiteWorkerService {
 
             _ = classificationToStep(classification)
 
+
             switch classification {
             case .success:
                 session.globalState = .success

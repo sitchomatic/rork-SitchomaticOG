@@ -564,7 +564,7 @@ class HumanInteractionEngine {
 
     private func executeVisionMLCoordinate(username: String, password: String, executeJS: @escaping (String) async -> String?, sessionId: String) async -> HumanPatternResult {
         var result = HumanPatternResult(pattern: .visionMLCoordinate)
-        let visionService = VisionMLService.shared
+        _ = VisionMLService.shared
 
         // Step 1: Capture screenshot for OCR-based element detection
         let screenshotJS = """
@@ -573,7 +573,8 @@ class HumanInteractionEngine {
         })()
         """
         let viewportStr = await executeJS(screenshotJS) ?? "{}"
-        var viewportSize = CGSize(width: 390, height: 844)
+        var viewportSize: CGSize = CGSize(width: 390, height: 844)
+        _ = viewportSize
         if let data = viewportStr.data(using: .utf8),
            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
            let w = json["w"] as? CGFloat, let h = json["h"] as? CGFloat, w > 0, h > 0 {

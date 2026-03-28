@@ -170,18 +170,6 @@ class PPSRAutomationViewModel: MemoryPressurePersistable {
     private var forceStopTask: Task<Void, Never>?
     private var autoRetryTask: Task<Void, Never>?
 
-    deinit {
-        pauseCountdownTask?.cancel()
-        connectionTestTask?.cancel()
-        batchTask?.cancel()
-        settingsSaveTask?.cancel()
-        cardsSaveTask?.cancel()
-        heartbeatTask?.cancel()
-        forceStopTask?.cancel()
-        autoRetryTask?.cancel()
-        logFlushTask?.cancel()
-    }
-
     private var sessionHeartbeatTimeout: TimeInterval {
         TimeoutResolver.resolveHeartbeatTimeout(max(90, testTimeout))
     }

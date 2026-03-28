@@ -1047,7 +1047,10 @@ class ProxyRotationService {
                             return true
                         }
                     } catch {
-                        DebugLogger.shared.log("ProxyRotation: connectivity check failed — \(error.localizedDescription)", category: .proxy, level: .debug)
+                        let msg = error.localizedDescription
+                        Task { @MainActor in
+                            DebugLogger.shared.log("ProxyRotation: connectivity check failed — \(msg)", category: .proxy, level: .debug)
+                        }
                     }
                     return false
                 }
