@@ -43,7 +43,7 @@ public final class NetworkTaskExecutor: @unchecked Sendable {
     /// Executes synchronous work on the network fast lane and returns the result.
     /// Bridges structured concurrency to the dedicated dispatch queue by suspending
     /// the caller and resuming on the high-priority queue.
-    public func run<T: Sendable>(_ work: @escaping @Sendable () throws -> T) async rethrows -> T {
+    public func run<T: Sendable>(_ work: @escaping @Sendable () throws -> T) async throws -> T {
         return try await withCheckedThrowingContinuation { continuation in
             queue.async {
                 do {

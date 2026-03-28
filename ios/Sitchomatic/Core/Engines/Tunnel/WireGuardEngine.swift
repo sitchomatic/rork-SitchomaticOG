@@ -1,5 +1,23 @@
 import Foundation
 
+// MARK: - IPPacketHeader (Zero-Copy)
+
+nonisolated struct IPPacketHeader: Sendable {
+    let version: UInt8
+    let protocolType: UInt8
+    let sourceAddress: UInt32
+    let destinationAddress: UInt32
+
+    init?(rawBuffer: UnsafeRawBufferPointer) {
+        guard rawBuffer.count >= 20 else { return nil }
+        let versionIHL = rawBuffer.load(as: UInt8.self)
+        self.version = versionIHL >> 4
+        self.protocolType = rawBuffer.load(fromByteOffset: 9, as: UInt8.self)
+        self.sourceAddress = rawBuffer.load(fromByteOffset: 12, as: UInt32.self).bigEndian
+        self.destinationAddress = rawBuffer.load(fromByteOffset: 16, as: UInt32.self).bigEndian
+    }
+}
+
 // MARK: - Packet Tunnel Protocol
 
 /// Sendable protocol for tunnel lifecycle management.

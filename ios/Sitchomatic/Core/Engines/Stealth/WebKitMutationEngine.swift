@@ -16,8 +16,8 @@ import WebKit
 /// consolidates stealth logic from `PPSRStealthService`, `FingerprintValidationService`,
 /// and `AntiBotDetectionService` into a single `@MainActor` engine.
 @MainActor
-public final class WebKitMutationEngine: Sendable {
-    public static let shared = WebKitMutationEngine()
+final class WebKitMutationEngine: Sendable {
+    static let shared = WebKitMutationEngine()
 
     // MARK: - State
 
@@ -32,7 +32,7 @@ public final class WebKitMutationEngine: Sendable {
     ///   - settings: Automation settings controlling stealth behavior
     ///   - profile: Stealth identity profile providing randomized seeds
     /// - Returns: A configured WKWebView ready for automation
-    public func spawnIsolatedWebView(
+    func spawnIsolatedWebView(
         id: UUID,
         settings: AutomationSettings,
         profile: StealthIdentityActor.IdentityProfile
@@ -66,12 +66,12 @@ public final class WebKitMutationEngine: Sendable {
     }
 
     /// Retrieves an active WebView by session ID.
-    public func webView(for id: UUID) -> WKWebView? {
+    func webView(for id: UUID) -> WKWebView? {
         activePool[id]
     }
 
     /// Destroys a WebView session and releases all associated resources.
-    public func destroyWebView(id: UUID) {
+    func destroyWebView(id: UUID) {
         guard let webView = activePool.removeValue(forKey: id) else { return }
         webView.stopLoading()
         webView.configuration.userContentController.removeAllUserScripts()
@@ -79,14 +79,14 @@ public final class WebKitMutationEngine: Sendable {
     }
 
     /// Destroys all active WebViews (e.g., on batch completion).
-    public func destroyAll() {
+    func destroyAll() {
         for (id, _) in activePool {
             destroyWebView(id: id)
         }
     }
 
     /// Returns the count of currently active WebViews.
-    public var activeCount: Int { activePool.count }
+    var activeCount: Int { activePool.count }
 
     // MARK: - Stealth Script Generation
 

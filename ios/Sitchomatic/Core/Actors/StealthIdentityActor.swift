@@ -119,7 +119,7 @@ public actor StealthIdentityActor {
     // MARK: - GPU Renderer Randomization
 
     /// Returns a realistic Apple GPU renderer string for WebGL spoofing.
-    nonisolated static func randomGPURenderer() -> String {
+    nonisolated public static func randomGPURenderer() -> String {
         let renderers = [
             "Apple GPU",
             "Apple A15 GPU",
